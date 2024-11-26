@@ -18,56 +18,16 @@ from bridge import const
 from bridge.auxiliary import aux, fld, rbt
 from bridge.processors.referee_state_processor import Color as ActiveTeam
 from bridge.processors.referee_state_processor import State as GameStates
-from bridge.strategy import attack_roles, defense_roles, kicker, ref_states
+
+class BallStatus(Enum):
+    Active = 0
+    Passive = 1
+    Ready = 2
 
 
-class States(Enum):
-    """Класс с глобальными состояниями игры"""
-
-    DEBUG = 0
-    DEFENSE = 1
-    ATTACK = 2
-
-
-class Role(Enum):
-    """Класс с ролями"""
-
-    GOALKEEPER = 0
-    ATTACKER = 1
-
-    PASS_DEFENDER = 3
-    WALLLINER = 2
-    FORWARD = 11
-
-    UNAVAILABLE = 100
-
-
-class FloatingBorder:
-    """Floating border for dangerous borders in conditions"""
-
-    def __init__(self, middle: float, moving: float = 0.1) -> None:
-        self.low = middle * (1 - moving)
-        self.high = middle * (1 + moving)
-
-        self.middle = middle
-        self.border = middle
-
-    def reset(self) -> None:
-        """Reset"""
-        self.__border = self.middle
-
-    def is_higher(self, val: float) -> bool:
-        """Return True if higher, return False if lower"""
-        if val > self.border:
-            self.border = self.low
-            return True
-        else:
-            self.border = self.high
-            return False
-
-    def is_lower(self, val: float) -> bool:
-        """Return False if higher, return True if lower"""
-        return not self.is_higher(val)
+class BallStatus_is_inside_poly(Enum):
+    Not_inside_poly = 0
+    Inside_poly = 1
 
 
 class Strategy:
@@ -76,147 +36,34 @@ class Strategy:
     def __init__(
         self,
         dbg_game_status: GameStates = GameStates.RUN,
-        dbg_state: States = States.ATTACK,
     ) -> None:
-
         self.game_status = dbg_game_status
         self.active_team: ActiveTeam = ActiveTeam.ALL
-        self.we_active = False
-        self.state = dbg_state
-        self.timer = time()
 
-        self.forwards: list[rbt.Robot] = []
-        self.prev_roles: list[Role] = [Role.UNAVAILABLE for _ in range(const.TEAM_ROBOTS_MAX_COUNT)]
+        self.old_ball = aux.Point(0, 0)
+        self.ball_status = BallStatus.Passive
+        self.ball_status_poly = BallStatus_is_inside_poly.Not_inside_poly
 
-        self.kick = kicker.KickerAux()
+        """idx роботов"""
+        self.idx_gk = 1
+        self.idx1 = 0
+        self.idx2 = 2
 
-        self.pass_or_kick_decision_border = FloatingBorder(0.2, 0.3)
+        self.enemy_idx_gk = 0
+        self.enemy_idx1 = 1
+        self.enemy_idx2 = 2
 
-        self.flag = 0
-
-        self.zero_pos: Optional[aux.Point] = None
-
-    def change_game_state(self, new_state: GameStates, upd_active_team: ActiveTeam) -> None:
+    def change_game_state(
+        self, new_state: GameStates, upd_active_team: ActiveTeam
+    ) -> None:
         """Изменение состояния игры и цвета команды"""
         self.game_status = new_state
         self.active_team = upd_active_team
-
-    def choose_roles(self, field: fld.Field) -> list[Role]:
-        """
-        Определение ролей для роботов на поле
-        """
-
-        ATTACK_ROLES = [
-            Role.FORWARD,
-            Role.FORWARD,
-            Role.FORWARD,
-            Role.FORWARD,
-            Role.FORWARD,
-            Role.FORWARD,
-        ]
-
-        DEFENSE_ROLES = [
-            Role.WALLLINER,
-            Role.PASS_DEFENDER,
-            Role.WALLLINER,
-            Role.PASS_DEFENDER,
-            Role.WALLLINER,
-            Role.WALLLINER,
-        ]
-
-        # atk_min = 1
-        # def_min = 2
-        atk_min = 1
-        def_min = 0
-
-        free_allies = -atk_min - def_min - 1
-
-        for ally in field.allies:
-            if ally.is_used() and ally.r_id != field.gk_id:
-                free_allies += 1
-
-        free_allies = max(0, free_allies)
-
-        ball_pos = aux.minmax(field.ball.get_pos().x, const.GOAL_DX)
-        atks = round(free_allies / (2 * const.GOAL_DX) * (-ball_pos * field.polarity + const.GOAL_DX)) + atk_min
-        defs = free_allies - (atks - atk_min) + def_min
-
-        roles = ATTACK_ROLES[:atks] + DEFENSE_ROLES[:defs]
-        return [Role.GOALKEEPER, Role.ATTACKER] + roles
-
-    def manage_roles(
-        self,
-        field: fld.Field,
-        roles: list[Role],
-        enemies_near_goal: list[aux.Point],
-    ) -> list[Role]:
-        pass_defenders_num = len(find_role(field, roles, Role.PASS_DEFENDER))
-        if pass_defenders_num > len(enemies_near_goal):
-            roles = replace_role(
-                roles,
-                Role.PASS_DEFENDER,
-                Role.WALLLINER,
-                pass_defenders_num - len(enemies_near_goal),
-            )
-
-        return sorted(roles, key=lambda x: x.value)
-
-    def choose_robots_for_roles(
-        self,
-        field: fld.Field,
-        roles: list[Role],
-        wall_pos: aux.Point,
-        enemies_near_goal: list[aux.Point],
-    ) -> list[Role]:
-        robot_roles: list[Role] = [Role.UNAVAILABLE for _ in range(const.TEAM_ROBOTS_MAX_COUNT)]
-        used_ids: list[int] = []
-
-        for robot_id, role in enumerate(self.prev_roles):
-            if role in [
-                Role.FORWARD,
-                Role.WALLLINER,
-                # Role.PASS_DEFENDER, TODO
-            ] and field.is_ball_moves_to_point(field.allies[robot_id].get_pos()):
-                used_ids.append(robot_id)
-                robot_roles[robot_id] = role
-                delete_role(roles, role)
-
-        # used_ids.append(13)
-        # robot_roles[13] = Role.WALLLINER
-        # delete_role(roles, Role.WALLLINER)
-
-        for i, role in enumerate(roles):
-            robot_id = -1
-            match role:
-                case Role.GOALKEEPER:
-                    robot_id = field.gk_id
-                case Role.ATTACKER:
-                    if field.robot_with_ball not in field.allies or field.robot_with_ball == field.allies[field.gk_id]:
-                        robot_id = fld.find_nearest_robot(field.ball.get_pos(), field.allies, used_ids).r_id
-                    else:
-                        robot_id = field.robot_with_ball.r_id
-                case Role.PASS_DEFENDER:
-                    enemy = enemies_near_goal.pop(0)
-                    robot_id = fld.find_nearest_robot(enemy, field.allies, used_ids).r_id
-                case Role.WALLLINER:
-                    robot_id = fld.find_nearest_robot(wall_pos, field.allies, used_ids).r_id
-                case Role.FORWARD:
-                    robot_id = fld.find_nearest_robot(field.enemy_goal.center, field.allies, used_ids).r_id
-            robot_roles[robot_id] = role
-            used_ids.append(robot_id)
-
-        self.prev_roles = robot_roles
-        return robot_roles
 
     def process(self, field: fld.Field) -> list[wp.Waypoint]:
         """
         Рассчитать конечные точки для каждого робота
         """
-        if self.game_status not in [GameStates.KICKOFF, GameStates.PENALTY]:
-            if self.active_team == ActiveTeam.ALL or field.ally_color == self.active_team:
-                self.we_active = True
-            else:
-                self.we_active = False
 
         waypoints: list[wp.Waypoint] = []
         for i in range(const.TEAM_ROBOTS_MAX_COUNT):
@@ -228,156 +75,265 @@ class Strategy:
                 )
             )
 
-        # self.game_status = GameStates.RUN
-        if field.ally_color == const.COLOR:
-            print("-" * 32)
-            print(self.game_status, "\twe_active:", self.we_active)
-
-        # self.debug(field, waypoints)
-        # return waypoints
-
-        match self.game_status:
-            case GameStates.RUN:
-                self.run(field, waypoints)
-            case GameStates.TIMEOUT:
-                ref_states.timeout(field, waypoints)
-            case GameStates.HALT:
-                pass
-                # self.halt(field, waypoints)
-            case GameStates.PREPARE_PENALTY:
-                ref_states.prepare_penalty(field, waypoints, self.we_active)
-            case GameStates.PENALTY:
-                if self.we_active:
-                    ref_states.penalty_kick(field, waypoints)
-                else:
-                    robot_with_ball = fld.find_nearest_robot(field.ball.get_pos(), field.enemies)
-                    waypoints[field.gk_id] = defense_roles.goalk(field, [], robot_with_ball)
-            case GameStates.PREPARE_KICKOFF:
-                ref_states.prepare_kickoff(field, waypoints, self.we_active)
-            case GameStates.KICKOFF:
-                ref_states.kickoff(field, waypoints, self.we_active)
-            case GameStates.FREE_KICK:
-                self.run(field, waypoints)
-            case GameStates.STOP:
-                self.run(field, waypoints)
-
-        # self.debug(field, waypoints)  # NOTE
+        
+        waypoints[self.idx1] = wp.Waypoint(
+            field.ball.get_pos(),
+            0,
+            wp.WType.S_BALL_KICK
+        )
 
         return waypoints
 
-    def run(self, field: fld.Field, waypoints: list[wp.Waypoint]) -> None:
-        """
-        Определение глобального состояния игры
-        roles - роли роботов, отсортированные по приоритету
-        robot_roles - список соответствия id робота и его роли
-        """
-        # waypoints[10] = wp.Waypoint(aux.Point(200, 0), 1.5, wp.WType.S_VELOCITY)
-        # field.allies[10].set_dribbler_speed(15)
-        # waypoints[10] = self.kick.shoot_to_goal(
-        #     field, field.allies[10], field.enemy_goal.center
-        # )
-        # return
+        global pos
+        global pos1
+        global pos2
 
-        "Определение набора ролей для роботов"
-        roles = self.choose_roles(field)
 
-        "Вычисление конечных точек, которые не зависят от выбранного робота"
-        wall_enemy = defense_roles.set_wall_enemy(field)
-        wall_pos = defense_roles.calc_wall_pos(field, wall_enemy)
-        enemies_near_goal = defense_roles.get_enemies_near_goal(field)
+        args = field.enemy_goal.center.arg()
+        ball = field.ball.get_pos()
+        attacker = field.allies[self.idx1].get_pos()
+        attacker1 = field.allies[self.idx2].get_pos()
 
-        "Выбор роботов для всех ролей, с учетом вычисленных выше точек"
-        roles = self.manage_roles(field, roles, enemies_near_goal)
-        robot_roles = self.choose_robots_for_roles(field, roles, wall_pos, enemies_near_goal.copy())
+        ### наши роботы ###
+        goalkeeper = field.allies[self.idx_gk].get_pos()
 
-        if field.ally_color == const.COLOR:
-            print("Roles", field.ally_color)
-            for idx, role in enumerate(robot_roles):
-                if role != Role.UNAVAILABLE:
-                    print("  ", idx, role)
+        ### флаг для определения бить или не бить вратарю по мячу ###
+        flag_to_kick_goalkeeper = wp.WType.S_IGNOREOBSTACLES
 
-        "Вычисление конечных точек, которые зависят от положения робота и создание путевых точек"
-        self.forwards = find_role(field, robot_roles, Role.FORWARD)
-        if self.forwards is not None:
-            attack_roles.set_forwards_wps(field, waypoints, self.forwards)
+        ### вражеские роботы ###
+        enemy_goalkeeper = field.enemies[self.enemy_idx_gk].get_pos()
+        enemy_attacker1 = field.enemies[self.enemy_idx1].get_pos()
+        enemy_attacker2 = field.enemies[self.enemy_idx2].get_pos()
+        list_enemy = [enemy_goalkeeper, enemy_attacker1, enemy_attacker2]
 
-        if Role.ATTACKER in robot_roles:
-            attacker_id = find_role(field, robot_roles, Role.ATTACKER)[0].r_id
-            attack_roles.attacker(field, waypoints, attacker_id, self.forwards)
+        ################################# goalkeeper ##################################
 
-        pass_defenders = find_role(field, robot_roles, Role.PASS_DEFENDER)
-        if len(pass_defenders) > 0:
-            defense_roles.set_pass_defenders_wps(field, waypoints, pass_defenders, enemies_near_goal)
+        ### Определение ближайшего вражеского робота к мячу ###
+        # if (ball - enemy_attacker1).mag() > (ball - enemy_attacker2).mag():
+        #    attacker = enemy_attacker2
+        #    idx_attacker = self.enemy_idx2
+        # else:
+        #    attacker = enemy_attacker1
+        #    idx_attacker = self.enemy_idx1
+        attacker = field.allies[self.enemy_idx1].get_pos()
+        idx_attacker = self.enemy_idx1
 
-        wallliners = find_role(field, robot_roles, Role.WALLLINER)
-        if len(wallliners) > 0:
-            defense_roles.set_wallliners_wps(field, waypoints, wallliners, wall_enemy)
+        ### Вражеский робот готовиться к удару ###
 
-        if Role.GOALKEEPER in robot_roles:
-            robot_with_ball = fld.find_nearest_robot(field.ball.get_pos(), field.enemies)
-            waypoints[field.gk_id] = defense_roles.goalk(field, wallliners, robot_with_ball)
+        if (ball - attacker).mag() < 150:
+            pos = aux.closest_point_on_line(attacker, ball, goalkeeper, "R")
 
-    def debug(self, field: fld.Field, waypoints: list[wp.Waypoint]) -> list[wp.Waypoint]:
-        """Отладка"""
+            ### Пересечение вектора атакующий робот - мяч и линии ворот ###
 
-        match self.flag:
-            case 0:
-                pos = aux.Point(-250, 1000)
-                angle = math.pi
+            cords1 = aux.get_line_intersection(
+                attacker,
+                ball,
+                field.ally_goal.up,
+                field.ally_goal.down,
+                "LL",
+            )
 
-            case 1:
-                pos = aux.Point(-500, 1000)
-                angle = math.pi
+            ### Пересечение линии ворот и параллельной прямой проходящей через мяч ###
 
-            case 2:
-                pos = aux.Point(-500, 1200)
-                angle = math.pi
+            cords2 = aux.get_line_intersection(
+                ball,
+                aux.Point(ball.x - 1, ball.y),
+                field.ally_goal.up,
+                field.ally_goal.down,
+                "LL",
+            )
 
-            case 3:
-                pos = aux.Point(-750, 1200)
-                angle = math.pi
-        idd = 10
-        if aux.in_place(field.allies[idd].get_pos(), pos, 50):
-            if time() - self.timer > 0.5:
-                self.flag += 1
-                self.flag = self.flag % 4
+            ### ближайшая точка к вектору мяч - средняя между прошлыми 2 точками ###
+
+            if cords1 is not None and cords2 is not None:
+                cords_Sr = aux.average_point([cords1, cords2])
+                pos = aux.closest_point_on_line(ball, cords_Sr, goalkeeper, "L")
+            field.strategy_image.draw_dot(pos, (0, 0, 255), 200)
+            self.ball_status = BallStatus.Ready
+
+        ### Вражеский робот не у мяча ###
+
         else:
-            self.timer = time()
-        angle += math.pi / 4
-        waypoints[idd] = wp.Waypoint(pos, angle, wp.WType.S_ENDPOINT)
-        print("vel", field.allies[idd].get_vel().mag())
-        print("dist to pos", (field.allies[idd].get_pos() - pos).mag())
-        field.strategy_image.draw_dot(pos, (0, 0, 0), const.ROBOT_R)
+
+            ### Координаты мяча по оси х в зоне ворот по х ###
+
+            if ball.x < field.ally_goal.up.x and ball.x > field.ally_goal.down.x:
+                pos = aux.closest_point_on_line(
+                    ball, aux.Point(ball.x - 1, ball.y), goalkeeper, "L"
+                )
+
+            ### Определяем на какой половине наши ворота ###
+
+            if field.ally_goal.center.x > 0:
+                argument_side = 1
+            else:
+                argument_side = -1
+
+            ### Строим биссектрису для мяча, х мяча выше ворот ###
+
+            if ball.x > field.ally_goal.up.x:
+                pos = aux.closest_point_on_line(
+                    ball, aux.Point(ball.x + argument_side, ball.y - 1), goalkeeper, "L"
+                )
+
+            ### Строим биссектрису для мяча, х мяча ниже ворот ###
+
+            else:
+                pos = aux.closest_point_on_line(
+                    ball, aux.Point(ball.x + argument_side, ball.y + 1), goalkeeper, "L"
+                )
+
+        ### Ловим мяч ###
+
+        if self.ball_status == BallStatus.Ready and (ball - attacker).mag() >= 150:
+
+            ### Пересечение вектора полёта мяча и линии ворот ###
+
+            cords1 = aux.get_line_intersection(
+                self.old_ball,
+                ball,
+                field.ally_goal.up,
+                field.ally_goal.down,
+                "LL",
+            )
+
+            ### Пересечение линии ворот и параллельной прямой проходящей через мяч ###
+
+            cords2 = aux.get_line_intersection(
+                ball,
+                aux.Point(ball.x + 1, ball.y),
+                field.ally_goal.up,
+                field.ally_goal.down,
+                "LL",
+            )
+
+            ### ближайшая точка к вектору мяч - средняя между прошлыми 2 точками ###
+
+            if cords1 is not None and cords2 is not None:
+                cords_Sr = aux.average_point([cords1, cords2])
+                pos = aux.closest_point_on_line(ball, cords_Sr, goalkeeper, "L")
+            else:
+                pos = aux.closest_point_on_line(self.old_ball, ball, goalkeeper, "L")
+            ### проверяем, что мяч в зоне ворот ###
+
+            if aux.is_point_inside_poly(ball, field.ally_goal.hull):
+                self.ball_status_poly = (
+                    BallStatus_is_inside_poly.Inside_poly
+                )  ### выходит из перехвата из за смены статуса ###
+
+        ### Мяч остановился, после удара в зоне ворот ###
+
+        if field.is_ball_stop_near_goal():
+            pos = ball
+            args = field.enemy_goal.center.arg()
+            flag_to_kick_goalkeeper = wp.WType.S_BALL_KICK
+
+        ### Мяч вылетел за зону ворот, после удара ###
+
+        if (
+            self.ball_status_poly == BallStatus_is_inside_poly.Inside_poly
+            and not aux.is_point_inside_poly(ball, field.ally_goal.hull)
+        ):
+            self.ball_status_poly = BallStatus_is_inside_poly.Not_inside_poly
+            self.ball_status = BallStatus.Passive
+
+            pos = field.ally_goal.center + field.ally_goal.eye_forw * 300
+
+        ### Координаты вне зоны ворот ###
+        if not aux.is_point_inside_poly(pos, field.ally_goal.hull):
+            pos = field.ally_goal.center + field.ally_goal.eye_forw * 300
+            args = field.enemy_goal.center.arg()
+            field.strategy_image.draw_dot(pos, (255, 0, 0), 200)
+
+        self.old_ball = ball
+        ################################### attacker ##########################################
+        result_cords = []
+        for enemy in list_enemy:
+            cords_peresch = []
+            cords = aux.get_tangent_points(enemy, ball, const.ROBOT_R)
+            if len(cords) >= 2:
+                for count in range(2):
+                    field.strategy_image.draw_dot(cords[0], (255, 0, 0), 40)
+                    field.strategy_image.draw_dot(cords[1], (255, 0, 0), 40)
+                    result = aux.get_line_intersection(
+                        ball,
+                        cords[count],
+                        field.enemy_goal.center_up,
+                        field.enemy_goal.center_down,
+                        "RL",
+                    )
+                    if result is not None:
+                        cords_peresch.append(result.y)
+                if len(cords_peresch) > 1:
+                    result_cords.append(cords_peresch)
+
+        for cordes in result_cords:
+            field.strategy_image.draw_line(
+                ball, aux.Point(-4500, cordes[0]), (255, 0, 0), 3
+            )
+            field.strategy_image.draw_line(
+                ball, aux.Point(-4500, cordes[1]), (255, 0, 0), 3
+            )
+            field.strategy_image.draw_line(
+                aux.Point(-4500, cordes[0]), aux.Point(-4500, cordes[1]), (255, 0, 0), 3
+            )
+
+        result_cords = sorted(result_cords)
+        if result_cords == []:
+            result_cords = [[0, 0]]
+        maximum = 0
+        count = 0
+        right = field.enemy_goal.up.y
+        for cords_right in result_cords:
+            if (
+                field.enemy_goal.up.y > cords_right[0]
+                and field.enemy_goal.up.y < cords_right[1]
+            ):
+                right = cords_right[1]
+                break
+        mid = 0
+        while count < len(result_cords) and right < field.enemy_goal.down.y:
+            left = result_cords[count][0]
+            if left > right:
+                if left > field.enemy_goal.down.y:
+                    left = field.enemy_goal.down.y
+                if maximum < left - right:
+                    maximum = left - right
+                    mid = aux.Point(-4500, (left + right) // 2)
+                    field.strategy_image.draw_dot(mid, (255, 0, 0), 40)
+                    right = result_cords[count][1]
+            count += 1
+        if mid is not 0: 
+            arg_atacker = (mid - ball).arg()
+            flag_to_kick_ball = wp.WType.S_BALL_KICK
+        
+        #def blok(x, y): 
+        #    global pos
+        #    global pos1
+        #    global pos2
+        #   pos =  aux.Point(x, y)
+        #    pos1 = aux.Point(x, y + 200)
+        #    pos2 = aux.Point(x, y - 200)
+ 
+        #blok(500,500)
+        ################################## Waypoints ##########################################
+
+        waypoints[self.idx1] = wp.Waypoint(
+            ball,
+            arg_atacker,
+            wp.WType.S_BALL_KICK
+        )
+
+        #waypoints[self.idx_gk] = wp.Waypoint(
+        #   pos,
+        #   args,
+        #   flag_to_kick_goalkeeper,
+        #)
+
+        #waypoints[self.idx2] = wp.Waypoint(
+        #   pos2,
+        #   args,
+        #   flag_to_kick_goalkeeper,
+        #)
 
         return waypoints
-
-
-def delete_role(roles: list[Role], role_to_delete: Role) -> None:
-    """Удаляет роль из массива (если роли в массиве нет, удаляет роль самого низкого приоритета)"""
-    for i, role in enumerate(roles):
-        if role == role_to_delete:
-            roles.pop(i)
-            return
-    roles.pop()
-
-
-def find_role(field: fld.Field, roles: list[Role], role_to_find: Role) -> list[rbt.Robot]:
-    """Возвращает массив со всеми роботами роли role_to_find"""
-    robots: list[rbt.Robot] = []
-    for i, role in enumerate(roles):
-        if role == role_to_find:
-            robots.append(field.allies[i])
-
-    return robots
-
-
-def replace_role(roles: list[Role], old_role: Role, new_role: Role, count: int = 1) -> list[Role]:
-    """Заменяет old_role на new_role, выполняется count раз"""
-    num = 0
-    for i, role in enumerate(roles):
-        if role == old_role:
-            roles[i] = new_role
-            num += 1
-            if num >= count:
-                return roles
-    return roles

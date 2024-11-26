@@ -19,7 +19,7 @@ DIV = "C"
 COLOR = Color.YELLOW
 POLARITY = 1  # -1 если ворота синих на +x; 1 если ворота синих на -x
 
-IS_SIMULATOR_USED = False
+IS_SIMULATOR_USED = True
 IS_DRIBBLER_USED = True  # dribbler and upper_kick
 SELF_PLAY = False
 
@@ -88,7 +88,7 @@ IMAGE_TOPIC = "image-topic"
 
 ##################################################
 # CONTROL CONSTS
-Ts = 0.02  # s
+Ts = 0.2  # s
 
 # ROBOT SETTING CONSTS
 MAX_SPEED = 1250
@@ -113,7 +113,7 @@ GOAL_PEN_DY = 2000
 
 GK_FORW = 200 + ROBOT_R
 if DIV == "C":
-    GOAL_DX = 2250
+    GOAL_DX = 4500
     GOAL_DY = 800
     GOAL_PEN_DX = 500
     GOAL_PEN_DY = 1350
@@ -123,8 +123,8 @@ if DIV == "C":
 KICK_ALIGN_DIST = 150
 GRAB_ALIGN_DIST = 130
 KICK_ALIGN_DIST_MULT = 1.5
-KICK_ALIGN_ANGLE = 0.07
-KICK_ALIGN_OFFSET = 20
+KICK_ALIGN_ANGLE = 0.08
+KICK_ALIGN_OFFSET = 25
 BALL_GRABBED_DIST = 115
 BALL_GRABBED_ANGLE = 0.8
 

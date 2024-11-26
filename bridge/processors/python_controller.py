@@ -36,7 +36,7 @@ class SSLController(BaseProcessor):
     commands_sink_writer: DataWriter = attr.ib(init=False)
 
     dbg_game_status: strategy.GameStates = strategy.GameStates.TIMEOUT
-    dbg_state: strategy.States = strategy.States.DEBUG
+    #dbg_state: strategy.States = strategy.States.DEBUG
 
     cur_time = time.time()
     delta_t = 0.0
@@ -188,7 +188,7 @@ class SSLController(BaseProcessor):
         self.cur_time = time.time()
 
         self.read_vision()
-        self.process_referee_cmd()
+        # self.process_referee_cmd()
         self.control_loop()
 
         self.control_assign()
