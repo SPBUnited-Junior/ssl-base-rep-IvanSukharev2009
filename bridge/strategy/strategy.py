@@ -75,15 +75,6 @@ class Strategy:
                 )
             )
 
-        
-        waypoints[self.idx1] = wp.Waypoint(
-            field.ball.get_pos(),
-            0,
-            wp.WType.S_BALL_KICK
-        )
-
-        return waypoints
-
         global pos
         global pos1
         global pos2
@@ -279,39 +270,52 @@ class Strategy:
             )
 
         result_cords = sorted(result_cords)
-        if result_cords == []:
-            result_cords = [[0, 0]]
         maximum = 0
         count = 0
         right = field.enemy_goal.up.y
         for cords_right in result_cords:
             if (
-                field.enemy_goal.up.y > cords_right[0]
-                and field.enemy_goal.up.y < cords_right[1]
+                field.enemy_goal.up.y <= cords_right[1]
+                and field.enemy_goal.up.y >= cords_right[0]
             ):
                 right = cords_right[1]
                 break
         mid = 0
+        left = None
+        print(right)
+        print(result_cords)
+        field.strategy_image.draw_dot(field.enemy_goal.up, (255, 0, 0), 40)
+        field.strategy_image.draw_dot(field.enemy_goal.down, (0, 250, 0), 40)
+        arg_atacker = (field.enemy_goal.center - ball).arg()
         while count < len(result_cords) and right < field.enemy_goal.down.y:
             left = result_cords[count][0]
+            print(left, "left")
             if left > right:
                 if left > field.enemy_goal.down.y:
                     left = field.enemy_goal.down.y
                 if maximum < left - right:
                     maximum = left - right
                     mid = aux.Point(-4500, (left + right) // 2)
-                    field.strategy_image.draw_dot(mid, (255, 0, 0), 40)
                     right = result_cords[count][1]
             count += 1
+        if left is None:
+            left = field.enemy_goal.down.y
+        if left <= field.enemy_goal.down.y:
+            left = field.enemy_goal.down.y
+            if maximum < left - right:
+                maximum = left - right
+                mid = aux.Point(-4500, (left + right) // 2)
         if mid is not 0: 
+            field.strategy_image.draw_dot(mid, (255, 0, 0), 40)
             arg_atacker = (mid - ball).arg()
             flag_to_kick_ball = wp.WType.S_BALL_KICK
+            #field.strategy_image.draw_dot(mid - ball, (255, 0, 0), 40)
         
         #def blok(x, y): 
         #    global pos
         #    global pos1
         #    global pos2
-        #   pos =  aux.Point(x, y)
+        #    pos =  aux.Point(x, y)
         #    pos1 = aux.Point(x, y + 200)
         #    pos2 = aux.Point(x, y - 200)
  
