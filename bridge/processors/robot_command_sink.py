@@ -127,16 +127,16 @@ class CommandSink(BaseProcessor):
                 rules.append(0)
         else:
             for i in range(const.TEAM_ROBOTS_MAX_COUNT):
-                control_team = self.y_control_team if self.y_control_team[i].is_used() else self.b_control_team
+                #control_team = self.y_control_team if self.y_control_team[i].is_used() else self.b_control_team
 
-                # if self.y_control_team[i].is_used():
-                #     pass
-                # elif self.b_control_team[i].is_used():
-                #     pass
-                # else:
-                #     for _ in range(13):
-                #         rules.append(0)
-                #     continue
+                if time() - self.y_control_team[i].last_update_ < 0.5:
+                    control_team = self.y_control_team
+                elif time() - self.b_control_team[i].last_update_< 0.5:
+                    control_team = self.b_control_team
+                else:
+                    for _ in range(13):
+                        rules.append(0)
+                    continue
 
                 if not const.IS_DRIBBLER_USED:
                     if round(time() * 2) % 10 == 0:

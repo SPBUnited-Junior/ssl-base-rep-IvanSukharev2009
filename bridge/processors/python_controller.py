@@ -90,7 +90,7 @@ class SSLController(BaseProcessor):
 
     def draw_image(self) -> None:
         """Send commands to drawer processor"""
-        if self.field.ally_color == const.Color.YELLOW:
+        if self.field.ally_color == const.COLOR:
             full_image = Image()
             for image in [
                 self.field.strategy_image,

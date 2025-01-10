@@ -23,7 +23,7 @@ IS_SIMULATOR_USED = True
 IS_DRIBBLER_USED = True  # dribbler and upper_kick
 SELF_PLAY = False
 
-GK = 8
+GK = 1
 PENALTY_KICKER = 0
 ENEMY_GK = 1
 
@@ -113,15 +113,15 @@ GOAL_PEN_DY = 2000
 
 GK_FORW = 200 + ROBOT_R
 if DIV == "C":
-    GOAL_DX = 4500
+    GOAL_DX = 2250
     GOAL_DY = 800
     GOAL_PEN_DX = 500
     GOAL_PEN_DY = 1350
 GK_FORW = 200 + ROBOT_R
-if DIV == "C":
-    GOAL_DX = 4500
+# if DIV == "C":
+#     GOAL_DX = 4500
 
-    GK_FORW = 100 + ROBOT_R
+#     GK_FORW = 100 + ROBOT_R
 
 KICK_ALIGN_DIST = 200
 GRAB_ALIGN_DIST = 200

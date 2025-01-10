@@ -55,10 +55,10 @@ class Drawer(BaseProcessor):
         external_image: drawing.Image = message_img.content
         field: fld.Field = message_fld.content
 
-        for rbt in field.allies:
+        for rbt in field.get_blu_team():
             if rbt.is_used():
                 external_image.draw_robot(rbt.get_pos(), rbt.get_angle())
-        for rbt in field.enemies:
+        for rbt in field.get_yel_team():
             if rbt.is_used():
                 external_image.draw_robot(rbt.get_pos(), rbt.get_angle(), (255, 255, 0))
 

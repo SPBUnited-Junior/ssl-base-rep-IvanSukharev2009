@@ -43,15 +43,19 @@ class Strategy:
         self.old_ball = aux.Point(0, 0)
         self.ball_status = BallStatus.Passive
         self.ball_status_poly = BallStatus_is_inside_poly.Not_inside_poly
+        self.old_pos = aux.Point(0, 0)
 
         """idx роботов"""
         self.idx_gk = 1
-        self.idx1 = 0
-        self.idx2 = 2
+        self.idx1 = 2
+        self.idx2 = 0
 
-        self.enemy_idx_gk = 0
-        self.enemy_idx1 = 1
-        self.enemy_idx2 = 2
+        self.enemy_idx_gk = 2
+        self.enemy_idx1 = 0
+        self.enemy_idx2 = 1
+
+        self.pos_holds_timer = 0
+        self.prev_pos = aux.Point(0, 0)
 
     def change_game_state(
         self, new_state: GameStates, upd_active_team: ActiveTeam
@@ -64,6 +68,7 @@ class Strategy:
         """
         Рассчитать конечные точки для каждого робота
         """
+
 
         waypoints: list[wp.Waypoint] = []
         for i in range(const.TEAM_ROBOTS_MAX_COUNT):
@@ -100,18 +105,15 @@ class Strategy:
         ################################# goalkeeper ##################################
 
         ### Определение ближайшего вражеского робота к мячу ###
-        # if (ball - enemy_attacker1).mag() > (ball - enemy_attacker2).mag():
-        #    attacker = enemy_attacker2
-        #    idx_attacker = self.enemy_idx2
-        # else:
-        #    attacker = enemy_attacker1
-        #    idx_attacker = self.enemy_idx1
-        attacker = field.allies[self.enemy_idx1].get_pos()
-        idx_attacker = self.enemy_idx1
+        if (ball - enemy_attacker1).mag() > (ball - enemy_attacker2).mag():
+            attacker = enemy_attacker2
+        else:
+            attacker = enemy_attacker1
+        attacker = field.allies[self.idx2].get_pos()
 
         ### Вражеский робот готовиться к удару ###
 
-        if (ball - attacker).mag() < 150:
+        if (ball - attacker).mag() < 250:
             pos = aux.closest_point_on_line(attacker, ball, goalkeeper, "R")
 
             ### Пересечение вектора атакующий робот - мяч и линии ворот ###
@@ -133,13 +135,47 @@ class Strategy:
                 field.ally_goal.down,
                 "LL",
             )
-
             ### ближайшая точка к вектору мяч - средняя между прошлыми 2 точками ###
-
+            cords_Sr = aux.average_point([cords1, cords2])
             if cords1 is not None and cords2 is not None:
-                cords_Sr = aux.average_point([cords1, cords2])
-                pos = aux.closest_point_on_line(ball, cords_Sr, goalkeeper, "L")
-            field.strategy_image.draw_dot(pos, (0, 0, 255), 200)
+                ### Берём отрезок полёта мяча внутри воротарской зоны ###
+                result = aux.get_line_intersection(
+                        ball,
+                        cords_Sr,
+                        field.ally_goal.frw_up - field.ally_goal.eye_forw * 1,
+                        field.ally_goal.center_up,
+                        "LS",
+                )
+                if result is None:
+                    result = aux.get_line_intersection(
+                            ball,
+                            cords_Sr,
+                            field.ally_goal.frw_down - field.ally_goal.eye_forw * 1,
+                            field.ally_goal.center_down,
+                            "LS",
+                    )
+                if result is None:
+                    result = aux.get_line_intersection(
+                            ball,
+                            cords_Sr,
+                            field.ally_goal.frw_up - field.ally_goal.eye_forw * 1,
+                            field.ally_goal.frw_down - field.ally_goal.eye_forw * 1,
+                            "LL",
+                        )
+                pos = aux.closest_point_on_line(result, cords_Sr, goalkeeper, "S")
+                field.strategy_image.draw_line(result, cords_Sr, (0, 0, 255), 5)
+                field.strategy_image.draw_line(pos, attacker, (0, 0, 255), 5)
+                if aux.dist(pos, self.prev_pos) > 80:
+                    self.pos_holds_timer = time()
+
+                self.prev_pos = pos
+
+                if time() - self.pos_holds_timer < 1:
+                    pos = field.ally_goal.center + field.ally_goal.eye_forw * 300
+
+                field.strategy_image.draw_dot(pos, (0, 0, 0), 40)
+                print(pos)
+            
             self.ball_status = BallStatus.Ready
 
         ### Вражеский робот не у мяча ###
@@ -176,17 +212,18 @@ class Strategy:
 
         ### Ловим мяч ###
 
-        if self.ball_status == BallStatus.Ready and (ball - attacker).mag() >= 150:
-
+        if self.ball_status == BallStatus.Ready and (ball - attacker).mag() >= 250:
             ### Пересечение вектора полёта мяча и линии ворот ###
-
-            cords1 = aux.get_line_intersection(
-                self.old_ball,
-                ball,
-                field.ally_goal.up,
-                field.ally_goal.down,
-                "LL",
-            )
+            if self.old_ball is not None:
+                cords1 = aux.get_line_intersection(
+                    self.old_ball,
+                    ball,
+                    field.ally_goal.up,
+                    field.ally_goal.down,
+                    "RL",
+                )
+            else:
+                cords1 = None
 
             ### Пересечение линии ворот и параллельной прямой проходящей через мяч ###
 
@@ -202,9 +239,49 @@ class Strategy:
 
             if cords1 is not None and cords2 is not None:
                 cords_Sr = aux.average_point([cords1, cords2])
-                pos = aux.closest_point_on_line(ball, cords_Sr, goalkeeper, "L")
+                if not aux.is_point_inside_poly(ball, field.ally_goal.hull):
+                    result = aux.get_line_intersection(
+                            ball,
+                            cords_Sr,
+                            field.ally_goal.frw_up - field.ally_goal.eye_forw * 1,
+                            field.ally_goal.frw_down - field.ally_goal.eye_forw * 1,
+                            "LL",
+                        )
+                else:
+                    result = ball
+                pos = aux.closest_point_on_line(result, cords_Sr, goalkeeper, "S")
+                field.strategy_image.draw_line(result, cords_Sr, (0, 0, 255), 5)
+                field.strategy_image.draw_line(pos, attacker, (0, 0, 255), 5)
+                field.strategy_image.draw_dot(pos, (0, 0, 0), 40)
+            elif cords1 is not None:
+                cords_Sr = cords1
+                if not aux.is_point_inside_poly(ball, field.ally_goal.hull):
+                    result = aux.get_line_intersection(
+                            ball,
+                            cords_Sr,
+                            field.ally_goal.frw_up - field.ally_goal.eye_forw * 1,
+                            field.ally_goal.frw_down - field.ally_goal.eye_forw * 1,
+                            "LL",
+                        )
+                else:
+                    result = ball
+                pos = aux.closest_point_on_line(result, cords_Sr, goalkeeper, "S")
+                field.strategy_image.draw_line(result, cords_Sr, (0, 0, 255), 5)
+                field.strategy_image.draw_line(pos, attacker, (0, 0, 255), 5)
+                field.strategy_image.draw_dot(pos, (0, 0, 0), 40)
             else:
-                pos = aux.closest_point_on_line(self.old_ball, ball, goalkeeper, "L")
+                cords_Sr = cords2
+                result = aux.get_line_intersection(
+                        ball,
+                        cords_Sr,
+                        field.ally_goal.frw_up - field.ally_goal.eye_forw * 1,
+                        field.ally_goal.frw_down - field.ally_goal.eye_forw * 1,
+                        "LL",
+                    )
+                pos = aux.closest_point_on_line(result, cords_Sr, goalkeeper, "S")
+                field.strategy_image.draw_line(result, cords_Sr, (0, 0, 255), 5)
+                field.strategy_image.draw_line(pos, attacker, (0, 0, 255), 5)
+                field.strategy_image.draw_dot(pos, (0, 0, 0), 40)
             ### проверяем, что мяч в зоне ворот ###
 
             if aux.is_point_inside_poly(ball, field.ally_goal.hull):
@@ -229,16 +306,20 @@ class Strategy:
             self.ball_status = BallStatus.Passive
 
             pos = field.ally_goal.center + field.ally_goal.eye_forw * 300
-
+    
         ### Координаты вне зоны ворот ###
+
         if not aux.is_point_inside_poly(pos, field.ally_goal.hull):
             pos = field.ally_goal.center + field.ally_goal.eye_forw * 300
             args = field.enemy_goal.center.arg()
-            field.strategy_image.draw_dot(pos, (255, 0, 0), 200)
 
-        self.old_ball = ball
+        self.old_ball = field.ball_start_point
+        field.strategy_image.draw_dot(pos, (255, 255, 0), 40)
         ################################### attacker ##########################################
-        result_cords = []
+
+        result_cords = [] ### массив пересечений косательных к вражеским робоотам и вражеских ворот ###
+
+        ### Строим косательные к вражеским роботам, и записываем точки пересечениа вражеских ворот и полученных костальных ###
         for enemy in list_enemy:
             cords_peresch = []
             cords = aux.get_tangent_points(enemy, ball, const.ROBOT_R)
@@ -258,6 +339,8 @@ class Strategy:
                 if len(cords_peresch) > 1:
                     result_cords.append(cords_peresch)
 
+        ### Hисуем прямые мяч - точка пересечения ворот и костальных ###
+
         for cordes in result_cords:
             field.strategy_image.draw_line(
                 ball, aux.Point(-4500, cordes[0]), (255, 0, 0), 3
@@ -269,10 +352,18 @@ class Strategy:
                 aux.Point(-4500, cordes[0]), aux.Point(-4500, cordes[1]), (255, 0, 0), 3
             )
 
+        ### Cоритруем координаты пересечений по y ###
+
         result_cords = sorted(result_cords)
         maximum = 0
         count = 0
+
+        ### Определяем самую первую точку 1###
+
         right = field.enemy_goal.up.y
+
+        ### Проверем что точка 1 не лежит в отрезке закрывемым вражеским роботом, а если закрыть то меняем самую первую точку 1 ###
+
         for cords_right in result_cords:
             if (
                 field.enemy_goal.up.y <= cords_right[1]
@@ -280,16 +371,14 @@ class Strategy:
             ):
                 right = cords_right[1]
                 break
+
+        ### Проходимся по прямым меняя точку 1 и точку 2, и находим максимальный свободный отрезок ###
+
         mid = 0
         left = None
-        print(right)
-        print(result_cords)
-        field.strategy_image.draw_dot(field.enemy_goal.up, (255, 0, 0), 40)
-        field.strategy_image.draw_dot(field.enemy_goal.down, (0, 250, 0), 40)
         arg_atacker = (field.enemy_goal.center - ball).arg()
         while count < len(result_cords) and right < field.enemy_goal.down.y:
             left = result_cords[count][0]
-            print(left, "left")
             if left > right:
                 if left > field.enemy_goal.down.y:
                     left = field.enemy_goal.down.y
@@ -298,6 +387,9 @@ class Strategy:
                     mid = aux.Point(-4500, (left + right) // 2)
                     right = result_cords[count][1]
             count += 1
+
+        ### Проверка 2 точки на существвание и чтобы лежала внутри ворот###
+        
         if left is None:
             left = field.enemy_goal.down.y
         if left <= field.enemy_goal.down.y:
@@ -305,11 +397,12 @@ class Strategy:
             if maximum < left - right:
                 maximum = left - right
                 mid = aux.Point(-4500, (left + right) // 2)
+
+        ### Проверка что mid посчитан ###
         if mid is not 0: 
             field.strategy_image.draw_dot(mid, (255, 0, 0), 40)
             arg_atacker = (mid - ball).arg()
             flag_to_kick_ball = wp.WType.S_BALL_KICK
-            #field.strategy_image.draw_dot(mid - ball, (255, 0, 0), 40)
         
         #def blok(x, y): 
         #    global pos
@@ -318,26 +411,41 @@ class Strategy:
         #    pos =  aux.Point(x, y)
         #    pos1 = aux.Point(x, y + 200)
         #    pos2 = aux.Point(x, y - 200)
- 
-        #blok(500,500)
+
+        ################################ atacker for test goalkeper ##################################
+
+        ### Определение дальнего угла ворот от вратаря ###
+
+        if (field.ally_goal.center_up - goalkeeper).mag() < (field.ally_goal.center_down - goalkeeper).mag():
+            args2 = (
+                field.ally_goal.down + field.ally_goal.eye_up * 100 - ball
+            ).arg()
+        else:
+            args2 = (
+                field.ally_goal.up - field.ally_goal.eye_up * 100 - ball
+            ).arg()
+
+        #################################### defer #######################################
+
+            
         ################################## Waypoints ##########################################
 
-        waypoints[self.idx1] = wp.Waypoint(
-            ball,
-            arg_atacker,
-            wp.WType.S_BALL_KICK
+        # waypoints[self.idx1] = wp.Waypoint(
+        #    ball,
+        #    arg_atacker,
+        #    wp.WType.S_BALL_KICK
+        # )
+
+        waypoints[self.idx_gk] = wp.Waypoint(
+           pos,
+           args,
+           flag_to_kick_goalkeeper,
         )
 
-        #waypoints[self.idx_gk] = wp.Waypoint(
-        #   pos,
-        #   args,
-        #   flag_to_kick_goalkeeper,
-        #)
-
-        #waypoints[self.idx2] = wp.Waypoint(
-        #   pos2,
-        #   args,
-        #   flag_to_kick_goalkeeper,
-        #)
+        waypoints[self.idx2] = wp.Waypoint(
+          ball,
+          args2,
+          wp.WType.S_BALL_KICK,
+        )
 
         return waypoints
