@@ -174,7 +174,6 @@ class Strategy:
                     pos = field.ally_goal.center + field.ally_goal.eye_forw * 300
 
                 field.strategy_image.draw_dot(pos, (0, 0, 0), 40)
-                print(pos)
             
             self.ball_status = BallStatus.Ready
 
@@ -343,13 +342,13 @@ class Strategy:
 
         for cordes in result_cords:
             field.strategy_image.draw_line(
-                ball, aux.Point(-4500, cordes[0]), (255, 0, 0), 3
+                ball, aux.Point(field.enemy_goal.up.x, cordes[0]), (255, 0, 0), 3
             )
             field.strategy_image.draw_line(
-                ball, aux.Point(-4500, cordes[1]), (255, 0, 0), 3
+                ball, aux.Point(field.enemy_goal.up.x, cordes[1]), (255, 0, 0), 3
             )
             field.strategy_image.draw_line(
-                aux.Point(-4500, cordes[0]), aux.Point(-4500, cordes[1]), (255, 0, 0), 3
+                aux.Point(field.enemy_goal.up.x, cordes[0]), aux.Point(field.enemy_goal.up.x, cordes[1]), (255, 0, 0), 3
             )
 
         ### Cоритруем координаты пересечений по y ###
@@ -384,7 +383,7 @@ class Strategy:
                     left = field.enemy_goal.down.y
                 if maximum < left - right:
                     maximum = left - right
-                    mid = aux.Point(-4500, (left + right) // 2)
+                    mid = aux.Point(field.enemy_goal.up.x, (left + right) // 2)
                     right = result_cords[count][1]
             count += 1
 
@@ -396,7 +395,7 @@ class Strategy:
             left = field.enemy_goal.down.y
             if maximum < left - right:
                 maximum = left - right
-                mid = aux.Point(-4500, (left + right) // 2)
+                mid = aux.Point(field.enemy_goal.up.x, (left + right) // 2)
 
         ### Проверка что mid посчитан ###
         if mid is not 0: 
@@ -426,6 +425,27 @@ class Strategy:
             ).arg()
 
         #################################### defer #######################################
+        def the_nearest_robot(lst: list[int], pnt: aux.Point) -> list:
+            min_mag = None
+            idx = 0
+            for i in lst:
+                b = pnt - field.allies[i].get_pos()
+                if min_mag is None or b.mag() < min_mag:
+                    min_mag = b.mag()
+                    idx = i
+
+            return [idx, min_mag]
+
+        def defer(robot):
+            field.strategy_image.draw_line(
+                field.enemy_goal.up, ball, (255, 0, 255), 3
+            )
+            field.strategy_image.draw_line(
+                field.enemy_goal.down, ball, (255, 0, 255), 3
+            )
+            while(robot - aux.closest_point_on_line(field.enemy_goal.down, ball, robot, "S") > 50 and
+                   robot - aux.closest_point_on_line(field.enemy_goal.up, ball, robot, "S") > 50):
+                pass
 
             
         ################################## Waypoints ##########################################
