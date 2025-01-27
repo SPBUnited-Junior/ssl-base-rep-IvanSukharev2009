@@ -83,15 +83,20 @@ class Strategy:
         global pos
         global pos1
         global pos2
-
+        start = 0
+        if start == 0:
+            start = 1
+            arg_atacker1 = 0
+            arg_atacker2 = 0
 
         args = field.enemy_goal.center.arg()
         ball = field.ball.get_pos()
-        attacker = field.allies[self.idx1].get_pos()
-        attacker1 = field.allies[self.idx2].get_pos()
+        attacker1 = field.allies[self.idx1].get_pos()
+        attacker2 = field.allies[self.idx2].get_pos()
 
         ### наши роботы ###
         goalkeeper = field.allies[self.idx_gk].get_pos()
+        list_ally = [goalkeeper, attacker1, attacker1]
 
         ### флаг для определения бить или не бить вратарю по мячу ###
         flag_to_kick_goalkeeper = wp.WType.S_IGNOREOBSTACLES
@@ -101,6 +106,7 @@ class Strategy:
         enemy_attacker1 = field.enemies[self.enemy_idx1].get_pos()
         enemy_attacker2 = field.enemies[self.enemy_idx2].get_pos()
         list_enemy = [enemy_goalkeeper, enemy_attacker1, enemy_attacker2]
+
 
         ################################# goalkeeper ##################################
 
@@ -402,6 +408,7 @@ class Strategy:
             field.strategy_image.draw_dot(mid, (255, 0, 0), 40)
             arg_atacker = (mid - ball).arg()
             flag_to_kick_ball = wp.WType.S_BALL_KICK
+            pos_attacker1 = ball
         
         #def blok(x, y): 
         #    global pos
@@ -425,36 +432,73 @@ class Strategy:
             ).arg()
 
         #################################### defer #######################################
-        def the_nearest_robot(lst: list[int], pnt: aux.Point) -> list:
+        def the_nearest_robot(lst: list[aux.Point], pnt: aux.Point) -> list:
             min_mag = None
-            idx = 0
+            robot = 0
             for i in lst:
-                b = pnt - field.allies[i].get_pos()
+                b = pnt - i
                 if min_mag is None or b.mag() < min_mag:
                     min_mag = b.mag()
-                    idx = i
+                    robot = i
 
-            return [idx, min_mag]
+            return [robot, min_mag]
 
         def defer(robot):
             field.strategy_image.draw_line(
-                field.enemy_goal.up, ball, (255, 0, 255), 3
-            )
+               ball, field.ally_goal.down, (255, 0, 255), 3
+            )  
+
             field.strategy_image.draw_line(
-                field.enemy_goal.down, ball, (255, 0, 255), 3
-            )
-            while(robot - aux.closest_point_on_line(field.enemy_goal.down, ball, robot, "S") > 50 and
-                   robot - aux.closest_point_on_line(field.enemy_goal.up, ball, robot, "S") > 50):
-                pass
+               ball, field.ally_goal.up, (255, 0, 255), 3
+            )  
 
+            field.strategy_image.draw_line(
+                ball, aux.closest_point_on_line(ball, field.ally_goal.down, robot, "S") + ((aux.rotate(field.ally_goal.down - ball, math.pi / 2)).unity()) * const.ROBOT_R, (255, 0, 255), 3
+            )           
+
+            field.strategy_image.draw_line(
+                ball, aux.closest_point_on_line(ball, field.ally_goal.up, robot, "S") - ((aux.rotate(field.ally_goal.up - ball, math.pi / 2)).unity()) * const.ROBOT_R, (255, 0, 255), 3
+            ) 
+
+            down = (aux.closest_point_on_line(ball, field.ally_goal.down, robot, "S") + ((aux.rotate(field.ally_goal.down - ball, math.pi / 2)).unity()) * const.ROBOT_R).mag()
+            up = (aux.closest_point_on_line(ball, field.ally_goal.up, robot, "S") - ((aux.rotate(field.ally_goal.up - ball, math.pi / 2)).unity()) * const.ROBOT_R).mag()
             
-        ################################## Waypoints ##########################################
+            if down < up:
+                return aux.closest_point_on_line(ball, field.ally_goal.down, robot, "S") + ((aux.rotate(field.ally_goal.down - ball, math.pi / 2)).unity()) * const.ROBOT_R
+            return aux.closest_point_on_line(ball, field.ally_goal.up, robot, "S") - ((aux.rotate(field.ally_goal.up - ball, math.pi / 2)).unity()) * const.ROBOT_R
+        
+        if the_nearest_robot(list_enemy, ball)[1] < the_nearest_robot(list_ally, ball)[1]:
+            if pos_attacker1 == the_nearest_robot(list_ally, ball)[0]:
+                pos_attacker1 = defer(the_nearest_robot(list_ally, ball)[0])
+                pos_attacker2 = aux.Point(0, 0)
+                flag_to_kick_ball1 = wp.WType.S_BALL_KICK
+                flag_to_kick_ball2 = wp.WType.S_IGNOREOBSTACLES
+            else:
+                pos_attacker2 = defer(the_nearest_robot(list_ally, ball)[0])
+                pos_attacker1 = aux.Point(0, 0)
+                flag_to_kick_ball2 = wp.WType.S_BALL_KICK
+                flag_to_kick_ball1 = wp.WType.S_IGNOREOBSTACLES
+        else:
+            if attacker1 == the_nearest_robot(list_ally, ball)[0]:
+                pos_attacker1 = ball
+                pos_attacker2 = defer(attacker2)
+                arg_atacker1 = arg_atacker
+                field.strategy_image.draw_line(
+                    ball, pos_attacker2, (255, 0, 255), 3
+                ) 
+                flag_to_kick_ball1 = wp.WType.S_BALL_KICK
+                flag_to_kick_ball2 = wp.WType.S_IGNOREOBSTACLES
+            else:
+                pos_attacker2 = ball
+                pos_attacker1 = defer(attacker1)
+                field.strategy_image.draw_line(
+                    ball, pos_attacker1, (255, 0, 255), 3
+                ) 
+                arg_atacker2 = arg_atacker  
+                flag_to_kick_ball2 = wp.WType.S_BALL_KICK
+                flag_to_kick_ball1 = wp.WType.S_IGNOREOBSTACLES
 
-        # waypoints[self.idx1] = wp.Waypoint(
-        #    ball,
-        #    arg_atacker,
-        #    wp.WType.S_BALL_KICK
-        # )
+        ################################## Waypoints ##########################################
 
         waypoints[self.idx_gk] = wp.Waypoint(
            pos,
@@ -462,10 +506,16 @@ class Strategy:
            flag_to_kick_goalkeeper,
         )
 
+        waypoints[self.idx1] = wp.Waypoint(
+          pos_attacker1,
+          arg_atacker1,
+          flag_to_kick_ball1,
+        )
+
         waypoints[self.idx2] = wp.Waypoint(
-          ball,
-          args2,
-          wp.WType.S_BALL_KICK,
+          pos_attacker2,
+          arg_atacker2,
+          flag_to_kick_ball2,
         )
 
         return waypoints
