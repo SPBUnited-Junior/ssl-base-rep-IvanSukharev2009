@@ -53,9 +53,9 @@ class Strategy:
         self.old_pos = aux.Point(0, 0)
 
         """ idx роботов """
-        self.idx_gk = 1
+        self.idx_gk = 2
         self.idx1 = 0
-        self.idx2 = 2
+        self.idx2 = 1
 
         self.enemy_idx_gk = 2
         self.enemy_idx1 = 0
@@ -104,7 +104,7 @@ class Strategy:
         list_ally = [goalkeeper, attacker1, attacker2]
 
         """ флаг для определения бить или не бить вратарю по мячу """
-        flag_to_kick_goalkeeper = wp.WType.S_IGNOREOBSTACLES
+        flag_to_kick_goalkeeper = wp.WType.S_ENDPOINT
 
         """ вражеские роботы """
         enemy_goalkeeper = field.enemies[self.enemy_idx_gk].get_pos()
@@ -118,10 +118,10 @@ class Strategy:
             return aux.closest_point_on_line(old_ball, ball, robot1, "R")
         def pas(ball: aux.Point, robot1: aux.Point, robot2: aux.Point) -> list:
 
-            lt = [aux.Point(robot2.x + 400, robot2.y + 400),
-                    aux.Point(robot2.x + 400, robot2.y - 400),
-                    aux.Point(robot2.x - 400, robot2.y - 400),
-                    aux.Point(robot2.x - 400, robot2.y + 400)
+            lt = [aux.Point(robot2.x + 1000, robot2.y + 1000),
+                    aux.Point(robot2.x + 1000, robot2.y - 1000),
+                    aux.Point(robot2.x - 1000, robot2.y - 1000),
+                    aux.Point(robot2.x - 1000, robot2.y + 1000)
             ]
             
             if aux.is_point_inside_poly(passes(ball, robot2, self.old_ball), lt):
@@ -524,22 +524,28 @@ class Strategy:
         if self.passes_status == flag_to_passes.true_attacker1:
             """ 2 робот принемает пас от 1 """
             pos_attacker1 = attacker1
+            arg_atacker1 = attacker1.arg()
             data_package = pas(ball, attacker1, attacker2)
             pos_attacker2 = data_package[0]
             arg_atacker2 = (ball - attacker2).arg()
-            flag_to_kick_ball1 = wp.WType.S_IGNOREOBSTACLES
-            flag_to_kick_ball2 = wp.WType.S_IGNOREOBSTACLES
+            flag_to_kick_ball1 = wp.WType.S_ENDPOINT
+            flag_to_kick_ball2 = wp.WType.S_ENDPOINT
+
+            field.allies[self.idx2].set_dribbler_speed(15)
 
             if (attacker2 - ball).mag() < 100 or not field.is_ball_moves():
                 self.passes_status = flag_to_passes.false
         elif self.passes_status == flag_to_passes.true_attacker2:
             """ 1 робот принемает пас от 2 """
             pos_attacker2 = attacker2
+            arg_atacker2 = attacker2.arg()
             data_package = pas(ball, attacker2, attacker1)
             pos_attacker1 = data_package[0]
             arg_atacker1 = (ball - attacker1).arg()
-            flag_to_kick_ball1 = wp.WType.S_IGNOREOBSTACLES
-            flag_to_kick_ball2 = wp.WType.S_IGNOREOBSTACLES
+            flag_to_kick_ball1 = wp.WType.S_ENDPOINT
+            flag_to_kick_ball2 = wp.WType.S_ENDPOINT
+
+            field.allies[self.idx1].set_dribbler_speed(15)
 
             if (attacker1 - ball).mag() < 100 or not field.is_ball_moves():
                 self.passes_status = flag_to_passes.false
@@ -564,8 +570,8 @@ class Strategy:
                         pos_attacker1 = block_robot_to_ball(ball, enemy_attacker1, attacker1)                                          
                     else:
                         pos_attacker1 = block_robot_to_ball(ball, enemy_attacker2, attacker1)
-                flag_to_kick_ball2 = wp.WType.S_IGNOREOBSTACLES
-                flag_to_kick_ball1 = wp.WType.S_IGNOREOBSTACLES
+                flag_to_kick_ball2 = wp.WType.S_ENDPOINT
+                flag_to_kick_ball1 = wp.WType.S_ENDPOINT
             else:
                 """
                 Определяем какой робот из наших ближе к мячу
@@ -584,7 +590,7 @@ class Strategy:
                             ball, pos_attacker2, (255, 0, 255), 3
                         ) 
                         flag_to_kick_ball1 = wp.WType.S_BALL_KICK
-                        flag_to_kick_ball2 = wp.WType.S_IGNOREOBSTACLES
+                        flag_to_kick_ball2 = wp.WType.S_ENDPOINT
                     else:
                         """ пас """
                         data_package = pas(ball, attacker1, attacker2)
@@ -592,8 +598,8 @@ class Strategy:
                         pos_attacker2 = optimal_point(ball, list_enemy, list_point_passes)
                         arg_atacker1 = data_package[1]
                         arg_atacker2 = (ball - attacker2).arg()
-                        flag_to_kick_ball1 = wp.WType.S_BALL_KICK
-                        flag_to_kick_ball2 = wp.WType.S_IGNOREOBSTACLES
+                        flag_to_kick_ball1 = wp.WType.S_BALL_PASS
+                        flag_to_kick_ball2 = wp.WType.S_ENDPOINT
 
                         """ перебираем ситуации чтобы понять когда принимать пас """
                         if self.flag == False and (ball - attacker1).mag() < 250:
@@ -612,7 +618,7 @@ class Strategy:
                         ) 
                         arg_atacker2 = arg_atacker  
                         flag_to_kick_ball2 = wp.WType.S_BALL_KICK
-                        flag_to_kick_ball1 = wp.WType.S_IGNOREOBSTACLES
+                        flag_to_kick_ball1 = wp.WType.S_ENDPOINT
                     else:
                         """ пас """
                         data_package = pas(ball, attacker2, attacker1)
@@ -620,8 +626,9 @@ class Strategy:
                         pos_attacker1 = optimal_point(ball, list_enemy, list_point_passes)
                         arg_atacker2 = data_package[1]
                         arg_atacker1 = (ball - attacker1).arg()
-                        flag_to_kick_ball2 = wp.WType.S_BALL_KICK
-                        flag_to_kick_ball1 = wp.WType.S_IGNOREOBSTACLES
+                        flag_to_kick_ball2 = wp.WType.S_BALL_PASS
+                        flag_to_kick_ball1 = wp.WType.S_ENDPOINT
+
 
                         """ перебираем ситуации чтобы понять когда принимать пас """
                         if self.flag == False and (ball - attacker2).mag() < 250:
@@ -650,5 +657,9 @@ class Strategy:
             arg_atacker2,
             flag_to_kick_ball2,
         )
-
+        
+        self.old_ball = field.ball_start_point
+        if self.old_ball is None:
+            self.old_ball = aux.Point(0, 0)
+        print(self.old_ball, ball)
         return waypoints
