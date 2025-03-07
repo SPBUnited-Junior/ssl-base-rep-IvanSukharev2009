@@ -436,7 +436,7 @@ def get_tangent_points(point0: Point, point1: Point, r: float) -> list[Point]:
         return [p2, p3]
 
 
-def get_angle_between_points(a: Point, b: Point, c: Point) -> float:
+def get_angle_between_points(b: Point, a: Point, c: Point) -> float:
     """
     Возвращает угол между направлениями из b на a и c
     """
