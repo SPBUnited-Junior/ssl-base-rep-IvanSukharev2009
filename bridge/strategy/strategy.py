@@ -52,7 +52,7 @@ class Strategy:
         self.passes_status = flag_to_passes.false
         self.old_pos = aux.Point(0, 0)
 
-        """idx роботов"""
+        """ idx роботов """
         self.idx_gk = 1
         self.idx1 = 0
         self.idx2 = 2
@@ -96,23 +96,23 @@ class Strategy:
 
         args = field.enemy_goal.center.arg()
         ball = field.ball.get_pos()
+
+        """ наши роботы """
         attacker1 = field.allies[self.idx1].get_pos()
         attacker2 = field.allies[self.idx2].get_pos()
-
-        ### наши роботы ###
         goalkeeper = field.allies[self.idx_gk].get_pos()
         list_ally = [goalkeeper, attacker1, attacker2]
 
-        ### флаг для определения бить или не бить вратарю по мячу ###
+        """ флаг для определения бить или не бить вратарю по мячу """
         flag_to_kick_goalkeeper = wp.WType.S_IGNOREOBSTACLES
 
-        ### вражеские роботы ###
+        """ вражеские роботы """
         enemy_goalkeeper = field.enemies[self.enemy_idx_gk].get_pos()
         enemy_attacker1 = field.enemies[self.enemy_idx1].get_pos()
         enemy_attacker2 = field.enemies[self.enemy_idx2].get_pos()
         list_enemy = [enemy_goalkeeper, enemy_attacker1, enemy_attacker2]
 
-        ################################ Passes ##################################
+        ############################ Passes #############################
         def passes(ball: aux.Point, robot1: aux.Point, old_ball: aux.Point) -> list:
             arg_pass = (robot1 - ball).arg()
             return aux.closest_point_on_line(old_ball, ball, robot1, "R")
@@ -123,7 +123,7 @@ class Strategy:
                     aux.Point(robot2.x - 400, robot2.y - 400),
                     aux.Point(robot2.x - 400, robot2.y + 400)
             ]
-            #print(aux.is_point_inside_poly(passes(ball, robot2, robot1)[1], lt), passes(ball, robot2, robot1)[1])
+            
             if aux.is_point_inside_poly(passes(ball, robot2, self.old_ball), lt):
                 pos_f = passes(ball, robot2, self.old_ball)
             else:
@@ -131,21 +131,21 @@ class Strategy:
 
             return [pos_f, (robot2 - ball).arg()]
 
-        ################################# goalkeeper ##################################
+        ############################ goalkeeper ##################################
 
-        ### Определение ближайшего вражеского робота к мячу ###
+        """ Определение ближайшего вражеского робота к мячу """
         if (ball - enemy_attacker1).mag() > (ball - enemy_attacker2).mag():
             attacker = enemy_attacker2
         else:
             attacker = enemy_attacker1
         attacker = field.allies[self.idx2].get_pos()
 
-        ### Вражеский робот готовиться к удару ###
+        """ Вражеский робот готовиться к удару """
 
         if (ball - attacker).mag() < 250:
             pos = aux.closest_point_on_line(attacker, ball, goalkeeper, "R")
 
-            ### Пересечение вектора атакующий робот - мяч и линии ворот ###
+            """ Пересечение вектора атакующий робот - мяч и линии ворот """
 
             cords1 = aux.get_line_intersection(
                 attacker,
@@ -155,7 +155,7 @@ class Strategy:
                 "LL",
             )
 
-            ### Пересечение линии ворот и параллельной прямой проходящей через мяч ###
+            """ Пересечение линии ворот и параллельной прямой проходящей через мяч """
 
             cords2 = aux.get_line_intersection(
                 ball,
@@ -164,10 +164,10 @@ class Strategy:
                 field.ally_goal.down,
                 "LL",
             )
-            ### ближайшая точка к вектору мяч - средняя между прошлыми 2 точками ###
+            """ ближайшая точка к вектору мяч - средняя между прошлыми 2 точками """
             cords_Sr = aux.average_point([cords1, cords2])
             if cords1 is not None and cords2 is not None:
-                ### Берём отрезок полёта мяча внутри воротарской зоны ###
+                """ Берём отрезок полёта мяча внутри воротарской зоны """
                 result = aux.get_line_intersection(
                         ball,
                         cords_Sr,
@@ -206,42 +206,41 @@ class Strategy:
             
             self.ball_status = BallStatus.Ready
 
-        ### Вражеский робот не у мяча ###
+            
 
         else:
-
-            ### Координаты мяча по оси х в зоне ворот по х ###
-
+            """ Вражеский робот не у мяча """
+            """ Координаты мяча по оси х в зоне ворот по х """
             if ball.x < field.ally_goal.up.x and ball.x > field.ally_goal.down.x:
                 pos = aux.closest_point_on_line(
                     ball, aux.Point(ball.x - 1, ball.y), goalkeeper, "L"
                 )
 
-            ### Определяем на какой половине наши ворота ###
+            """ Определяем на какой половине наши ворота """
 
             if field.ally_goal.center.x > 0:
                 argument_side = 1
             else:
                 argument_side = -1
 
-            ### Строим биссектрису для мяча, х мяча выше ворот ###
+            """ Строим биссектрису для мяча, х мяча выше ворот """
 
             if ball.x > field.ally_goal.up.x:
                 pos = aux.closest_point_on_line(
                     ball, aux.Point(ball.x + argument_side, ball.y - 1), goalkeeper, "L"
                 )
 
-            ### Строим биссектрису для мяча, х мяча ниже ворот ###
+                """ Строим биссектрису для мяча, х мяча ниже ворот """
 
             else:
                 pos = aux.closest_point_on_line(
                     ball, aux.Point(ball.x + argument_side, ball.y + 1), goalkeeper, "L"
                 )
 
-        ### Ловим мяч ###
+        """ Ловим мяч """
 
         if self.ball_status == BallStatus.Ready and (ball - attacker).mag() >= 250:
-            ### Пересечение вектора полёта мяча и линии ворот ###
+            """  Пересечение вектора полёта мяча и линии ворот """
             if self.old_ball is not None:
                 cords1 = aux.get_line_intersection(
                     self.old_ball,
@@ -253,7 +252,7 @@ class Strategy:
             else:
                 cords1 = None
 
-            ### Пересечение линии ворот и параллельной прямой проходящей через мяч ###
+            """ Пересечение линии ворот и параллельной прямой проходящей через мяч """
 
             cords2 = aux.get_line_intersection(
                 ball,
@@ -263,8 +262,7 @@ class Strategy:
                 "LL",
             )
 
-            ### ближайшая точка к вектору мяч - средняя между прошлыми 2 точками ###
-
+            """ ближайшая точка к вектору мяч - средняя между прошлыми 2 точками """
             if cords1 is not None and cords2 is not None:
                 cords_Sr = aux.average_point([cords1, cords2])
                 if not aux.is_point_inside_poly(ball, field.ally_goal.hull):
@@ -310,14 +308,16 @@ class Strategy:
                 field.strategy_image.draw_line(result, cords_Sr, (0, 0, 255), 5)
                 field.strategy_image.draw_line(pos, attacker, (0, 0, 255), 5)
                 field.strategy_image.draw_dot(pos, (0, 0, 0), 40)
-            ### проверяем, что мяч в зоне ворот ###
 
+            """ проверяем, что мяч в зоне ворот """
             if aux.is_point_inside_poly(ball, field.ally_goal.hull):
+                """ выходит из перехвата из за смены статуса """
                 self.ball_status_poly = (
                     BallStatus_is_inside_poly.Inside_poly
-                )  ### выходит из перехвата из за смены статуса ###
+                )  
+                
 
-        ### Мяч остановился, после удара в зоне ворот ###
+        """ Мяч остановился, после удара в зоне ворот """
 
         if field.is_ball_stop_near_goal():
             data_package = pas(goalkeeper, attacker1)
@@ -326,7 +326,7 @@ class Strategy:
             args = data_package[0]
             flag_to_kick_goalkeeper = wp.WType.S_BALL_KICK
 
-        ### Мяч вылетел за зону ворот, после удара ###
+        """ Мяч вылетел за зону ворот, после удара """
 
         if (
             self.ball_status_poly == BallStatus_is_inside_poly.Inside_poly
@@ -337,18 +337,18 @@ class Strategy:
 
             pos = field.ally_goal.center + field.ally_goal.eye_forw * 300
     
-        ### Координаты вне зоны ворот ###
+        """ Координаты вне зоны ворот """
 
         if not aux.is_point_inside_poly(pos, field.ally_goal.hull):
             pos = field.ally_goal.center + field.ally_goal.eye_forw * 300
             args = field.enemy_goal.center.arg()
 
         field.strategy_image.draw_dot(pos, (255, 255, 0), 40)
-        ################################### attacker ##########################################
+        ################################# attacker ##################################
 
-        result_cords = [] ### массив пересечений косательных к вражеским робоотам и вражеских ворот ###
+        result_cords = [] ### массив пересечений косательных к вражеским робоотам и вражеских ворот 
 
-        ### Строим косательные к вражеским роботам, и записываем точки пересечениа вражеских ворот и полученных костальных ###
+        """ Строим косательные к вражеским роботам, и записываем точки пересечениа вражеских ворот и полученных костальных """
         for enemy in list_enemy:
             cords_peresch = []
             cords = aux.get_tangent_points(enemy, ball, const.ROBOT_R)
@@ -368,7 +368,7 @@ class Strategy:
                 if len(cords_peresch) > 1:
                     result_cords.append(sorted(cords_peresch))
 
-        ### Hисуем прямые мяч - точка пересечения ворот и костальных ###
+        """ Hисуем прямые мяч - точка пересечения ворот и костальных """
 
         for cordes in result_cords:
             field.strategy_image.draw_line(
@@ -381,17 +381,13 @@ class Strategy:
                 aux.Point(field.enemy_goal.up.x, cordes[0]), aux.Point(field.enemy_goal.up.x, cordes[1]), (255, 0, 0), 3
             )
 
-        ### Cоритруем координаты пересечений по y ###
+        """ Cоритруем координаты пересечений по y """
 
         result_cords = sorted(result_cords)
-        # if const.POLARITY == 1:
-        #     result_cords = result_cords[::-1]
-        # print(const.POLARITY)
         maximum = 0
         
-        ### Определяем самую первую точку 1###
+        """ Определем координаты взависимости оот полярности """
 
-        
         if const.POLARITY == 1:
             field_up = field.enemy_goal.up
             field_down = field.enemy_goal.down
@@ -399,15 +395,14 @@ class Strategy:
             field_down = field.enemy_goal.up
             field_up = field.enemy_goal.down
 
-
-        ### Проходимся по прямым меняя точку 1 и точку 2, и находим максимальный свободный отрезок ###
         mid = 0
         left = None
         count = 0
         if count < len(result_cords):
             left = result_cords[count][0]
         right = field_up.y
-        #print(result_cords, right, left)
+        
+        """ Определяем певый отрезок в воротах """
         while(count < len(result_cords) ):
             if (left > right and right > field_up.y and left < field_down.y):
                 break
@@ -421,8 +416,8 @@ class Strategy:
 
         if count != 0:
             count -= 1
-        #print(right, left)
 
+        """ Перебираем свободные отрезки лежащие подрят """
         arg_atacker = (field.enemy_goal.center - ball).arg()
         while count < len(result_cords) and right < field_down.y:
             if left > right:
@@ -434,8 +429,7 @@ class Strategy:
             right = result_cords[count][1]
             count += 1
 
-        ### Проверка 2 точки на существвание и чтобы лежала внутри ворот###
-
+        """ Проверка точки на существвание и чтобы лежала внутри ворот """
         if left is None:
             left = field_down.y
         if left <= field_down.y:
@@ -444,14 +438,14 @@ class Strategy:
                 maximum = left - right
                 mid = aux.Point(field_up.x, (left + right) // 2)
 
-        ### Проверка что mid посчитан ###
+        """ Проверка что mid посчитан """
         if mid is not 0: 
             field.strategy_image.draw_dot(mid, (255, 0, 0), 40)
             arg_atacker = (mid - ball).arg()
 
-        #################################### defer #######################################
+        ############################### defer #################################
 
-        ### строим окружность между двух косательных ###
+        """ строим окружность между двух косательных """ 
         def Circle_to_two_tangents(radius: float, point:aux.Point, point_1: aux.Point, point_2: aux.Point) -> aux.Point:
             if point_1.y > point_2.y:
                 lower_point = point_2
@@ -465,7 +459,7 @@ class Strategy:
             center = aux.rotate(center, -angle)
             return center + ball
 
-        ### ближайшая точка среди точек к точке ###
+        """ ближайшая точка среди точек к точке """
         def the_nearest_robot(lst: list[aux.Point], pnt: aux.Point) -> list:
             min_mag = None
             robot = 0
@@ -476,13 +470,13 @@ class Strategy:
                     robot = i
             return [robot, min_mag]
 
-        ### блокировать робота ### 
+        """ блокировать робота """ 
         def block_robot_to_ball(ball:aux.Point, enemy_robot:aux.Point, robot:aux.Point) -> aux.Point:
             return aux.closest_point_on_line(ball, enemy_robot, robot, "S")
 
         list_point_passes = [aux.Point(-1000, 1000), 
         aux.Point(-1000, -1000),]
-        
+
         def optimal_point(ball: aux.Point, lst: list[aux.Point], pnts: list[aux.Point]):
             maxim = 0
             res = aux.Point(0, 0)
@@ -493,7 +487,7 @@ class Strategy:
                         res = j
             return res
 
-        ### защита ворот, с помощью деления зонв пополам ###
+        """ защита ворот, с помощью деления зоны пополам """
         def defer(robot:aux.Point) -> aux.Point:
             field.strategy_image.draw_line(
                ball, field.ally_goal.down, (255, 0, 255), 3
@@ -528,29 +522,39 @@ class Strategy:
                     return Circle_to_two_tangents(const.ROBOT_R, ball, field.ally_goal.down, field.ally_goal.up)
 
         if self.passes_status == flag_to_passes.true_attacker1:
+            """ 2 робот принемает пас от 1 """
             pos_attacker1 = attacker1
             data_package = pas(ball, attacker1, attacker2)
             pos_attacker2 = data_package[0]
             arg_atacker2 = (ball - attacker2).arg()
             flag_to_kick_ball1 = wp.WType.S_IGNOREOBSTACLES
             flag_to_kick_ball2 = wp.WType.S_IGNOREOBSTACLES
+
             if (attacker2 - ball).mag() < 100 or not field.is_ball_moves():
                 self.passes_status = flag_to_passes.false
         elif self.passes_status == flag_to_passes.true_attacker2:
+            """ 1 робот принемает пас от 2 """
             pos_attacker2 = attacker2
             data_package = pas(ball, attacker2, attacker1)
             pos_attacker1 = data_package[0]
             arg_atacker1 = (ball - attacker1).arg()
             flag_to_kick_ball1 = wp.WType.S_IGNOREOBSTACLES
             flag_to_kick_ball2 = wp.WType.S_IGNOREOBSTACLES
+
             if (attacker1 - ball).mag() < 100 or not field.is_ball_moves():
                 self.passes_status = flag_to_passes.false
         else:
-            if the_nearest_robot(list_enemy, ball)[1] < the_nearest_robot(list_ally, ball)[1]:   ### Определяем чей робот ближе, наш или вражеский
+            """Определяем чей робот ближе, наш или вражеский"""
+            if the_nearest_robot(list_enemy, ball)[1] < the_nearest_robot(list_ally, ball)[1]: 
+                """
+                Определяем какой из наших роботов ближе к мячу и   
+                    1) защита ворот
+                    2) блокируем второго робота врага
+                """
                 if (attacker1 - Circle_to_two_tangents(const.ROBOT_R, ball, field.ally_goal.down, field.ally_goal.up)).mag() < (attacker2 - Circle_to_two_tangents(const.ROBOT_R, ball, field.ally_goal.down, field.ally_goal.up)).mag(): 
-                    if ((enemy_attacker2 - ball).mag() - the_nearest_robot(list_enemy, ball)[1]) < 10:            ### Определяем какой из наших роботов ближе к мячу и 
-                        pos_attacker2 = block_robot_to_ball(ball, enemy_attacker1, attacker2)            ###  1) защита ворот
-                    else:                                                                                ###  2) блокируем второго робота врага
+                    if ((enemy_attacker2 - ball).mag() - the_nearest_robot(list_enemy, ball)[1]) < 10:            
+                        pos_attacker2 = block_robot_to_ball(ball, enemy_attacker1, attacker2)            
+                    else:                                                                               
                         pos_attacker2 = block_robot_to_ball(ball, enemy_attacker2, attacker2)
                                     
                     pos_attacker1 = defer(attacker1) 
@@ -563,17 +567,26 @@ class Strategy:
                 flag_to_kick_ball2 = wp.WType.S_IGNOREOBSTACLES
                 flag_to_kick_ball1 = wp.WType.S_IGNOREOBSTACLES
             else:
-                if attacker1 == the_nearest_robot(list_ally, ball)[0]:      ### Определяем какой робот из наших ближе к мячу
+                """
+                Определяем какой робот из наших ближе к мячу
+                    1) Отправляеи его бить мяч в ворота или давать пас(нету паса)
+                    2) В зависимости от ситуации 
+                        a) даём пас 
+                        б) бьём по воротам
+                """
+                if attacker1 == the_nearest_robot(list_ally, ball)[0]:      
                     if mid is not 0 and ball.x < 0:
-                        pos_attacker1 = ball                                       ### 1)Отправляеи его бить мяч в ворота или давать пас(нету паса)
-                        pos_attacker2 = defer(attacker2)                           ### 2) Не придумал
-                        arg_atacker1 = arg_atacker
+                        """ удар в ворота """
+                        pos_attacker1 = ball                                      
+                        pos_attacker2 = defer(attacker2)                           
+                        arg_atacker1 = arg_atacker                                  
                         field.strategy_image.draw_line(
                             ball, pos_attacker2, (255, 0, 255), 3
                         ) 
                         flag_to_kick_ball1 = wp.WType.S_BALL_KICK
                         flag_to_kick_ball2 = wp.WType.S_IGNOREOBSTACLES
                     else:
+                        """ пас """
                         data_package = pas(ball, attacker1, attacker2)
                         pos_attacker1 = ball 
                         pos_attacker2 = optimal_point(ball, list_enemy, list_point_passes)
@@ -581,6 +594,8 @@ class Strategy:
                         arg_atacker2 = (ball - attacker2).arg()
                         flag_to_kick_ball1 = wp.WType.S_BALL_KICK
                         flag_to_kick_ball2 = wp.WType.S_IGNOREOBSTACLES
+
+                        """ перебираем ситуации чтобы понять когда принимать пас """
                         if self.flag == False and (ball - attacker1).mag() < 250:
                             self.flag = True
                         if self.flag == True and field.is_ball_moves():
@@ -589,6 +604,7 @@ class Strategy:
 
                 else:
                     if mid is not 0 and ball.x < 0:
+                        """ удар в ворота """
                         pos_attacker2 = ball
                         pos_attacker1 = defer(attacker1)
                         field.strategy_image.draw_line(
@@ -598,6 +614,7 @@ class Strategy:
                         flag_to_kick_ball2 = wp.WType.S_BALL_KICK
                         flag_to_kick_ball1 = wp.WType.S_IGNOREOBSTACLES
                     else:
+                        """ пас """
                         data_package = pas(ball, attacker2, attacker1)
                         pos_attacker2 = ball 
                         pos_attacker1 = optimal_point(ball, list_enemy, list_point_passes)
@@ -605,6 +622,8 @@ class Strategy:
                         arg_atacker1 = (ball - attacker1).arg()
                         flag_to_kick_ball2 = wp.WType.S_BALL_KICK
                         flag_to_kick_ball1 = wp.WType.S_IGNOREOBSTACLES
+
+                        """ перебираем ситуации чтобы понять когда принимать пас """
                         if self.flag == False and (ball - attacker2).mag() < 250:
                             self.flag = True
                         if self.flag == True and field.is_ball_moves():
@@ -612,8 +631,8 @@ class Strategy:
                             self.flag = False
 
 
-        ################################## Waypoints ##########################################
-        print(self.flag, self.passes_status)
+        ############################## Waypoints ###############################
+        
         waypoints[self.idx_gk] = wp.Waypoint(
            pos,
            args,
