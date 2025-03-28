@@ -28,7 +28,7 @@ if __name__ == "__main__":
         SSLController(
             ally_color=const.COLOR,
             processing_pause=const.Ts,
-            reduce_pause_on_process_time=True,
+            reduce_pause_on_process_time=False,
             dbg_game_status=strategy.GameStates.RUN,
             #dbg_state=strategy.States.ATTACK,
         ),
@@ -39,7 +39,7 @@ if __name__ == "__main__":
         #     dbg_game_status=strategy.GameStates.RUN,
         #     dbg_state=strategy.States.ATTACK,
         # ),
-        Drawer(),
+        Drawer(reduce_pause_on_process_time=False),
         CommandSink(processing_pause=0.001),
         # RobotCommandsSender(processing_pause=0.001), # moved to command_sink
         # BoxFeedbackCollector(processing_pause=0.001),

@@ -215,11 +215,12 @@ class Router:
         target = self.routes[idx].get_next_wp().pos
 
         if obstacles is None:
-            obstacles_dist: list[tuple[Entity, float]] = [(field.ball, aux.dist(field.ball.get_pos(), robot.get_pos()))]
+            temp_ball = Entity(field.ball.get_pos(), 0, const.BALL_R)
+            obstacles_dist: list[tuple[Entity, float]] = [(temp_ball, aux.dist(field.ball.get_pos(), robot.get_pos()))]
 
             for obstacle in field.enemies:  # in [field.enemies, field.allies]
                 dist = (obstacle.get_pos() - robot.get_pos()).mag()
-                if obstacle.is_used() and dist > obstacle.get_radius() + robot.get_radius():
+                if obstacle.is_used() and dist > obstacle.get_radius() + robot.get_radius() + 50:
                     obstacles_dist.append((obstacle.to_entity(), dist))
 
             sorted_obstacles = sorted(obstacles_dist, key=lambda x: x[1])

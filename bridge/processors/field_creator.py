@@ -136,6 +136,6 @@ class FieldCreator(BaseProcessor):
         # if len(b_bots_pos[0]) > 0:
         #     print(b_bots_pos[0][0])
 
-        feedback_queue = self.box_feedback_reader.read_new()
-        if feedback_queue:
-            print("feedback from box:", feedback_queue)
+        # feedback_queue = self.box_feedback_reader.read_new()
+        # if feedback_queue:
+        #     print("feedback from box:", feedback_queue)
