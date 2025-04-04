@@ -53,19 +53,20 @@ class Strategy:
 
         self.Robot_receiving_the_pass = 0
         # Индексы наших роботов
-        self.idx_gk = 5
-        self.idx1 = 0
-        self.idx2 = 6
+        self.idx_gk = 0
+        self.idx1 = 1
+        self.idx2 = 2
 
         # Индексы вражеских роботов
         self.enemy_idx_gk = 0
-        self.enemy_idx1 = 6
-        self.enemy_idx2 = 1
+        self.enemy_idx1 = 1
+        self.enemy_idx2 = 2
 
         self.pos_holds_timer = 0
         self.timer_stop_dribbler = 0
         self.prev_pos = aux.Point(0, 0)
         self.pos_to_pas = aux.Point(0, 0)
+        self.old_pos = aux.Point(0, 0)
 
         self.list_optimal_point = []
         for x in range(-2000, 2000, 500):
@@ -97,22 +98,8 @@ class Strategy:
             )
 
         ball = field.ball.get_pos()
-        # if self.game_status == GameStates.HALT:
-        #     return waypoints
-        # elif self.game_status == GameStates.STOP:
-        #     waypoints[self.idx1] = wp.Waypoint(
-        #         aux.Point(500, 1000), 
-        #         0, 
-        #         wp.WType.S_ENDPOINT
-        #     )
 
-        #     waypoints[self.idx2] = wp.Waypoint(
-        #         aux.Point(500, -1000), 
-        #         0, 
-        #         wp.WType.S_ENDPOINT
-        #     ) 
-        #     return waypoints
-        # print(self.game_status)
+        print(self.game_status)
 
         # ::NOTE:: думаю уже пора как-то обобщить эту логику, чтобы не прописывать id своих роботов и роботов соперника руками.
         # Что-то вроде такого:
@@ -131,17 +118,77 @@ class Strategy:
         enemy_goalkeeper = field.enemies[self.enemy_idx_gk].get_pos()
         enemy_attacker1 = field.enemies[self.enemy_idx1].get_pos()
         enemy_attacker2 = field.enemies[self.enemy_idx2].get_pos()
+
         list_enemy = [enemy_goalkeeper, enemy_attacker1, enemy_attacker2]
+        attacker = self._the_nearest_robot(list_enemy, ball)[0]
 
         # Первоначальное значение направления
         enemy_goal_arg = field.enemy_goal.center.arg()
+        self.game_status = GameStates.RUN
+        if self.game_status == GameStates.HALT:
+            return waypoints
         
+        elif self.game_status == GameStates.STOP:
+            waypoints[self.idx1] = wp.Waypoint(
+                aux.Point(500, 1000), 
+                0, 
+                wp.WType.S_ENDPOINT
+            )
+
+            waypoints[self.idx2] = wp.Waypoint(
+                aux.Point(500, -1000), 
+                0, 
+                wp.WType.S_ENDPOINT
+            ) 
+            return waypoints
+        elif self.game_status == GameStates.STOP:
+            return waypoints
+        
+        elif self.game_status == GameStates.PREPARE_PENALTY:
+            if we_active:
+                waypoints[self.idx1] = wp.Waypoint(
+                    ball - field.ally_goal.eye_forw * 300, 
+                    ball.arg, 
+                    wp.WType.S_ENDPOINT
+                )
+            else:
+                pos_gk, angle_gk, flag_kick_gk = self._process_goalkeeper(field, ball, attacker, goalkeeper, attacker)
+                waypoints[self.idx_gk] = wp.Waypoint(
+                    pos_gk, 
+                    angle_gk, 
+                    flag_kick_gk
+                )
+
+        elif self.game_status == GameStates.PENALTY:
+            if we_active:
+                field.allies[self.idx1].dribbler_speed_ = 10
+                kick_delta = 150
+
+                if abs(aux.get_angle_between_points(enemy_goalkeeper, ball, field.enemy_goal.up)) > abs(
+                    aux.get_angle_between_points(enemy_goalkeeper, ball, field.enemy_goal.down)
+                ):
+                    target = aux.Point(field.enemy_goal.center.x, kick_delta)
+                else:
+                    target = aux.Point(field.enemy_goal.center.x, -kick_delta)
+
+                waypoints[self.idx1] = wp.Waypoint(ball, aux.angle_to_point(ball, target), wp.WType.S_BALL_KICK)
+            else:
+                pos_gk, angle_gk, flag_kick_gk = self._process_goalkeeper(field, ball, attacker, goalkeeper, attacker)
+                waypoints[self.idx_gk] = wp.Waypoint(
+                    pos_gk, 
+                    angle_gk, 
+                    flag_kick_gk
+                )
+        elif self.game_status == GameStates.PREPARE_KICKOFF:
+            pass
+            
+
+
         # Вызываем вспомогательный метод для расчёта позиции вратаря
         # Здесь логика определения "attacker" внутри метода не меняется, хоть в оригинале оно переопределялось
         # Передаём позицию для нападающего из наших (idx2) как attacker.
-        attacker = enemy_attacker1
         pos_gk, angle_gk, flag_kick_gk = self._process_goalkeeper(field, ball, attacker, goalkeeper, attacker1)
-
+        
         # ::NOTE:: опять же, мне не нравится жесткая привязка к количеству роботов. Что если одного удалят, например?
         # Вызываем метод для расчёта позиций нападающих
         (
@@ -170,17 +217,17 @@ class Strategy:
             flag_kick_gk
         )
 
-        # waypoints[self.idx1] = wp.Waypoint(
-        #     pos_attacker1, 
-        #     angle_attacker1, 
-        #     flag_kick_ball1
-        # )
+        waypoints[self.idx1] = wp.Waypoint(
+            pos_attacker1, 
+            angle_attacker1, 
+            flag_kick_ball1
+        )
 
-        # waypoints[self.idx2] = wp.Waypoint(
-        #     pos_attacker2, 
-        #     angle_attacker2, 
-        #     flag_kick_ball2
-        # )
+        waypoints[self.idx2] = wp.Waypoint(
+            pos_attacker2, 
+            angle_attacker2, 
+            flag_kick_ball2
+        )
         
         self.old_ball = field.ball_start_point or aux.Point(0, 0)
         return waypoints
@@ -251,18 +298,17 @@ class Strategy:
         return aux.closest_point_on_line(ball, enemy_robot, robot, "S")
 
     def _optimal_point(
-        self, robot: aux.Point, ball: aux.Point, enemy_list: list[aux.Point], candidate_points: list[aux.Point], field: fld.Field
+        self, robot: aux.Point, ball: aux.Point, enemy_list: list[aux.Point], candidate_points: list[aux.Point], dist: int, mid: aux.Point, field: fld.Field
     ) -> aux.Point:
         """
         Находит оптимальную точку для паса, сравнивая расстояния.
         """
-        min_dist = 5000
+        maxim = 0
         res = aux.Point(0, 0)
         for cand in candidate_points:
             minim = 10000
-            minim1 = 10000
             flag_to_point = True
-            if aux.dist(robot, cand) > 200:
+            if aux.dist(robot, cand) > dist:
                 flag_to_point = False
                 continue
             for enemy in enemy_list:
@@ -270,10 +316,9 @@ class Strategy:
                     flag_to_point = False
                     break
                 minim = min((enemy - aux.closest_point_on_line(ball, cand, enemy, "S")).mag(), minim)
-                minim1 =  min((enemy - aux.closest_point_on_line(cand, field.enemy_goal.center, enemy, "S")).mag(), minim1)
-            if (min_dist > aux.dist(cand, field.enemy_goal.center) and minim1 > const.ROBOT_R + 60 and minim > const.ROBOT_R + 60 and flag_to_point):
+            if (self.check_point(field, cand, enemy_list) > maxim and minim > const.ROBOT_R + 60 and flag_to_point and (mid is 0 or aux.dist(robot, aux.closest_point_on_line(ball, mid, robot)) > const.ROBOT_R + 60)):
                 res = cand
-                min_dist = aux.dist(cand, field.enemy_goal.center)
+                maxim = self.check_point(field, cand, enemy_list)
         field.strategy_image.draw_dot(res, (255, 0, 255), 3)
         return res
 
@@ -325,41 +370,32 @@ class Strategy:
         if (ball - attacker).mag() < 250:
             pos = aux.closest_point_on_line(attacker, ball, goalkeeper, "R")
             cords1 = aux.get_line_intersection(attacker, ball, field.ally_goal.up, field.ally_goal.down, "LL")
-            cords2 = aux.get_line_intersection(ball, aux.Point(ball.x - 1, ball.y), field.ally_goal.up, field.ally_goal.down, "LL")
-            if cords1 is not None and cords2 is not None:
-                cords_sr = aux.average_point([cords1, cords2])
+            if cords1 is not None:
                 result = aux.get_line_intersection(
                     ball,
-                    cords_sr,
+                    cords1,
                     field.ally_goal.frw_up - field.ally_goal.eye_forw,
                     field.ally_goal.center_up,
                     "LS",
                 )
-                if result is None:
+                if result is aux.Point:
                     result = aux.get_line_intersection(
                         ball,
-                        cords_sr,
+                        cords1,
                         field.ally_goal.frw_down - field.ally_goal.eye_forw,
                         field.ally_goal.center_down,
                         "LS",
                     )
-                if result is None:
-                    result = aux.get_line_intersection(
-                        ball,
-                        cords_sr,
-                        field.ally_goal.frw_up - field.ally_goal.eye_forw,
-                        field.ally_goal.frw_down - field.ally_goal.eye_forw,
-                        "LL",
-                    )
-                pos = aux.closest_point_on_line(result, cords_sr, goalkeeper, "S")
-                field.strategy_image.draw_line(result, cords_sr, (0, 0, 255), 5)
-                field.strategy_image.draw_line(pos, attacker, (0, 0, 255), 5)
-                if aux.dist(pos, self.prev_pos) > 80:
-                    self.pos_holds_timer = time()
-                self.prev_pos = pos
-                if time() - self.pos_holds_timer < 1:
-                    pos = field.ally_goal.center + field.ally_goal.eye_forw * 300
-                field.strategy_image.draw_dot(pos, (0, 0, 0), 40)
+
+                    pos = aux.closest_point_on_line(result, cords1, goalkeeper, "S")
+                    field.strategy_image.draw_line(result, cords1, (0, 0, 255), 5)
+                    field.strategy_image.draw_line(pos, attacker, (0, 0, 255), 5)
+                    if aux.dist(pos, self.prev_pos) > 80:
+                        self.pos_holds_timer = time()
+                    self.prev_pos = pos
+                    if time() - self.pos_holds_timer < 1:
+                        pos = field.ally_goal.center + field.ally_goal.eye_forw * 300
+                    field.strategy_image.draw_dot(pos, (0, 0, 0), 40)
             self.ball_status = BallStatus.Ready
         else:
             # Если противник не у мяча
@@ -367,58 +403,41 @@ class Strategy:
             angle = field.enemy_goal.center.arg()
 
         # Если вратарь готов (мяч ранее отмечен как Ready) и противник далеко
-        if field.ball.get_vel().mag() > 50:
-            cords1 = (
-                aux.get_line_intersection(self.old_ball, ball, field.ally_goal.up, field.ally_goal.down, "RL")
-                if self.old_ball is not None
-                else None
-            )
-            cords2 = aux.get_line_intersection(ball, aux.Point(ball.x + 1, ball.y), field.ally_goal.up, field.ally_goal.down, "LL")
-            if cords1 is not None and cords2 is not None:
-                cords_sr = aux.average_point([cords1, cords2])
-                if not aux.is_point_inside_poly(ball, field.ally_goal.hull):
-                    result = aux.get_line_intersection(
-                        ball,
-                        cords_sr,
-                        field.ally_goal.frw_up - field.ally_goal.eye_forw,
-                        field.ally_goal.frw_down - field.ally_goal.eye_forw,
-                        "LL",
-                    )
-                else:
-                    result = ball
-                pos = aux.closest_point_on_line(result, cords_sr, goalkeeper, "S")
-                field.strategy_image.draw_line(result, cords_sr, (0, 0, 255), 5)
-                field.strategy_image.draw_line(pos, attacker, (0, 0, 255), 5)
-                field.strategy_image.draw_dot(pos, (0, 0, 0), 40)
-            elif cords1 is not None:
+        if False:
+            cords1 = aux.Point(10000, 0)
+            cords1.arg = aux.rotate(field.allies[self.idx_gk].get_angle())
+            
+            if cords1 is not None:
                 cords_sr = cords1
                 if not aux.is_point_inside_poly(ball, field.ally_goal.hull):
                     result = aux.get_line_intersection(
-                        ball,
-                        cords_sr,
+                        attacker,
+                        cords1,
                         field.ally_goal.frw_up - field.ally_goal.eye_forw,
                         field.ally_goal.frw_down - field.ally_goal.eye_forw,
                         "LL",
                     )
-                else:
-                    result = ball
-                pos = aux.closest_point_on_line(result, cords_sr, goalkeeper, "S")
-                field.strategy_image.draw_line(result, cords_sr, (0, 0, 255), 5)
-                field.strategy_image.draw_line(pos, attacker, (0, 0, 255), 5)
-                field.strategy_image.draw_dot(pos, (0, 0, 0), 40)
-            elif cords2 is not None:
-                cords_sr = cords2  # ::NOTE:: cords2 can be None
-                result = aux.get_line_intersection(
-                    ball,
-                    cords_sr,
-                    field.ally_goal.frw_up - field.ally_goal.eye_forw,
-                    field.ally_goal.frw_down - field.ally_goal.eye_forw,
-                    "LL",
-                )
-                pos = aux.closest_point_on_line(result, cords_sr, goalkeeper, "S")
-                field.strategy_image.draw_line(result, cords_sr, (0, 0, 255), 5)
-                field.strategy_image.draw_line(pos, attacker, (0, 0, 255), 5)
-                field.strategy_image.draw_dot(pos, (0, 0, 0), 40)
+                    if result is None:
+                        result = aux.get_line_intersection(
+                                attacker,
+                                cords1,
+                                field.ally_goal.frw_down - field.ally_goal.eye_forw * 1,
+                                field.ally_goal.center_down,
+                                "LS",
+                        )
+                    if result is None:
+                        result = aux.get_line_intersection(
+                                attacker,
+                                cords1,
+                                field.ally_goal.frw_up - field.ally_goal.eye_forw * 1,
+                                field.ally_goal.frw_down - field.ally_goal.eye_forw * 1,
+                                "LL",
+                            )
+
+                    pos = aux.closest_point_on_line(result, cords_sr, goalkeeper, "S")
+                    field.strategy_image.draw_line(result, cords_sr, (0, 0, 255), 5)
+                    field.strategy_image.draw_line(pos, attacker, (0, 0, 255), 5)
+                    field.strategy_image.draw_dot(pos, (0, 0, 0), 40)
             else:
                 pass  # ::NOTE:: do sth if cords1 and coords2 is None
             if aux.is_point_inside_poly(ball, field.ally_goal.hull):
@@ -448,7 +467,88 @@ class Strategy:
         else:
             angle = field.enemy_goal.center.arg()
         field.strategy_image.draw_dot(pos, (255, 0, 0), 40)
+        self.old_pos = pos
         return pos, angle, flag_to_kick_goalkeeper
+
+    def check_point(
+        self,
+        field: fld.Field,
+        ball: aux.Point,
+        list_enemy: list[aux.Point],     
+    ) -> int:
+        # Расчёт касательных к вражеским роботам
+        result_cords = []
+        for enemy in list_enemy:
+            tangent_points = aux.get_tangent_points(enemy, ball, const.ROBOT_R)
+            if len(tangent_points) >= 2:
+                cords_peresch = []
+                for count in range(2):
+                    result = aux.get_line_intersection(
+                        ball,
+                        tangent_points[count],
+                        field.enemy_goal.center_up,
+                        field.enemy_goal.center_down,
+                        "RL",
+                    )
+                    if result is not None:
+                        cords_peresch.append(result.y)
+                if len(cords_peresch) == 1:
+                    if ball.y < 0:
+                        result_cords.append(sorted([cords_peresch[0], 1500]))
+                    else:
+                        result_cords.append(sorted([cords_peresch[0], -1500]))
+                if len(cords_peresch) > 1:
+                    result_cords.append(sorted(cords_peresch))
+        result_cords = sorted(result_cords)
+        maximum = 0
+
+        if (const.POLARITY == -1 and const.COLOR == const.Color.BLUE) or (const.POLARITY == 1 and const.COLOR == const.Color.YELLOW):
+            field_up = field.enemy_goal.up
+            field_down = field.enemy_goal.down
+        else:
+            field_down = field.enemy_goal.up
+            field_up = field.enemy_goal.down
+
+        mid = 0
+        left = min(result_cords[0][0], field_down.y) if result_cords else None
+        right = field_up.y
+        count = 0
+        arg_attacker = (field.enemy_goal.center - ball).arg()
+        while count < len(result_cords):
+            if left is not None and (left > right and right >= field_up.y and left <= field_down.y and left - right > 100):
+                maximum = left - right
+                mid = aux.Point(field_up.x, (left + right) // 2)
+                break
+            right = min(max(result_cords[count][1], right), field_down.y)
+            count += 1
+            if count < len(result_cords):
+                left = result_cords[count][0]
+            if left > field_down.y:
+                left = field_down.y 
+
+        if count != 0:
+            count -= 1
+        while count < len(result_cords) and right < field_down.y:
+            if left > right:
+                if left > field_down.y:
+                    left = field_down.y
+                if left - right > maximum and left - right > 100 and right >= field_up.y:
+                    maximum = left - right
+                    mid = aux.Point(field_up.x, (left + right) // 2)
+            right = max(result_cords[count][1], right)
+            count += 1
+            if count < len(result_cords):
+                left = result_cords[count][0]
+        if left is None:
+            left = field_down.y
+        if left <= field_down.y:
+            left = field_down.y
+            if left - right > maximum and left > right and left - right > 100 and right >= field_up.y:
+                maximum = left - right
+                mid = aux.Point(field_up.x, (left + right) // 2)
+
+        return maximum
+        
 
     def _process_attackers(
         self,
@@ -484,7 +584,12 @@ class Strategy:
                     )
                     if result is not None:
                         cords_peresch.append(result.y)
-                if len(cords_peresch) > 1:
+                if len(cords_peresch) == 1:
+                    if ball.y < 0:
+                        result_cords.append(sorted([cords_peresch[0], 1500]))
+                    else:
+                        result_cords.append(sorted([cords_peresch[0], -1500]))
+                elif len(cords_peresch) > 1:
                     result_cords.append(sorted(cords_peresch))
         for cordes in result_cords:
             field.strategy_image.draw_line(
@@ -627,20 +732,21 @@ class Strategy:
             nearest_ally, dist_ally = self._the_nearest_robot(list_ally, ball)
 
             if attacker1 == nearest_ally:
+                op_point = self._optimal_point(attacker2, ball, list_enemy, self.list_optimal_point, aux.dist(ball, attacker2), 0, field)
                 if mid is not 0:
                     pos_attacker1 = ball
-                    pos_attacker2 = attacker2
+                    pos_attacker2 = self._optimal_point(attacker2, ball, list_enemy, self.list_optimal_point, 500, mid, field)
                     angle_attacker1 = arg_attacker
                     field.strategy_image.draw_line(ball, pos_attacker2, (255, 0, 255), 3)
                     flag_kick_ball1 = wp.WType.S_BALL_KICK
                     flag_kick_ball2 = wp.WType.S_ENDPOINT
                 else:
                     pos_attacker1 = ball
-                    pos_attacker2 = self._optimal_point(attacker2, ball, list_enemy, self.list_optimal_point, field)
+                    pos_attacker2 = op_point
                     # Используем _pas для получения угла паса
                     _, angle_attacker1 = self._pass(ball, attacker1, attacker2)
                     angle_attacker2 = (ball - attacker2).arg()
-                    angle_attacker1 = (self._optimal_point(attacker2, ball, list_enemy, self.list_optimal_point, field) - ball).arg()
+                    angle_attacker1 = (op_point - ball).arg()
                     flag_kick_ball1 = wp.WType.S_BALL_PASS
                     flag_kick_ball2 = wp.WType.S_ENDPOINT
                     if not self.flag and (ball - attacker1).mag() < 250:
@@ -649,19 +755,20 @@ class Strategy:
                         self.passes_status = FlagToPasses.TRUE_ATTACKER1
                         self.flag = False
             else:
+                op_point = self._optimal_point(attacker1, ball, list_enemy, self.list_optimal_point, aux.dist(ball, attacker1), 0, field)
                 if mid is not 0:
                     pos_attacker2 = ball
-                    pos_attacker1 = attacker1
+                    pos_attacker1 = self._optimal_point(attacker1, ball, list_enemy, self.list_optimal_point, 500, mid, field)
                     field.strategy_image.draw_line(ball, pos_attacker1, (255, 0, 255), 3)
                     angle_attacker2 = arg_attacker
                     flag_kick_ball2 = wp.WType.S_BALL_KICK
                     flag_kick_ball1 = wp.WType.S_ENDPOINT
                 else:
                     pos_attacker2 = ball
-                    pos_attacker1 = self._optimal_point(attacker1, ball, list_enemy, self.list_optimal_point, field)
+                    pos_attacker1 = op_point
                     _, angle_attacker2 = self._pass(ball, attacker2, attacker1)
                     angle_attacker1 = (ball - attacker1).arg()
-                    angle_attacker2 = (self._optimal_point(attacker1, ball, list_enemy, self.list_optimal_point, field) - ball).arg()
+                    angle_attacker2 = (op_point - ball).arg()
                     flag_kick_ball2 = wp.WType.S_BALL_PASS
                     flag_kick_ball1 = wp.WType.S_ENDPOINT
                     if not self.flag and (ball - attacker2).mag() < 250:
