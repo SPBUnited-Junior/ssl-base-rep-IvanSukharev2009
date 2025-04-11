@@ -136,7 +136,7 @@ class SSLController(BaseProcessor):
         if cur_cmd.state == -1:
             return
         
-        if cur_state == state_machine.State.STOP or (
+        if cur_state in [state_machine.State.STOP, state_machine.State.PREPARE_KICKOFF] or (
             cur_active not in [const.Color.ALL, self.field.ally_color]
         ):
             self.router.avoid_ball(True)

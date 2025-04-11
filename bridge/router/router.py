@@ -218,7 +218,7 @@ class Router:
             temp_ball = Entity(field.ball.get_pos(), 0, const.BALL_R)
             obstacles_dist: list[tuple[Entity, float]] = [(temp_ball, aux.dist(field.ball.get_pos(), robot.get_pos()))]
 
-            for obstacle in field.enemies:  # in [field.enemies, field.allies]
+            for obstacle in field.enemies + field.allies:
                 dist = (obstacle.get_pos() - robot.get_pos()).mag()
                 if obstacle.is_used() and dist > obstacle.get_radius() + robot.get_radius() + 50:
                     obstacles_dist.append((obstacle.to_entity(), dist))
@@ -252,8 +252,8 @@ class Router:
             center = obstacle.get_pos() + obstacle.get_vel() * time_to_reach
             radius = (
                 obstacle.get_radius()
-                + const.ROBOT_R
-                + time_to_reach * obstacle.get_vel().mag() * 0.3  # <-- coefficient of fear [0; 1] (for moving obst)
+                + const.ROBOT_R * 1.2
+                + time_to_reach * obstacle.get_vel().mag() * 0.5  # <-- coefficient of fear [0; 1] (for moving obst)
             )
             # field.path_image.draw_dot(
             #     center,

@@ -23,7 +23,7 @@ if __name__ == "__main__":
 
     PROCESSORS = [
         VisionDetectionsCollector(processing_pause=0.001),  # TODO: move to field creator
-        #RefereeCommandsCollector(processing_pause=0.001),
+        RefereeCommandsCollector(processing_pause=0.001),
         FieldCreator(processing_pause=0.01),
         SSLController(
             ally_color=const.COLOR,
